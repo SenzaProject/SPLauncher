@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- tetes kaca -->
+    <path android:pathData="M54,30 C66,30 76,40 76,54 C76,68 66,78 54,78 C42,78 32,68 32,54 C32,40 42,30 54,30z"
+        android:strokeColor="#E6FFFFFF" android:strokeWidth="1.6">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="38" android:startY="32" android:endX="72" android:endY="78"
+                android:type="linear">
+                <item android:offset="0" android:color="#66FFFFFF" />
+                <item android:offset="1" android:color="#1AFFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- sorot -->
+    <path android:pathData="M41,46 C43,39 49,35 56,35" android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="3" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <!-- huruf S (geometris) -->
+    <path android:pathData="M60,46 C60,42 56,41 53,41 C49,41 46,43 46,47 C46,53 60,52 60,59 C60,63 57,66 53,66 C49,66 46,64 46,60"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="4" android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+</vector>
