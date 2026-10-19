@@ -27,6 +27,9 @@ final class Prefs {
     boolean reduceMotion() { return sp.getBoolean("reduceMotion", false); }
     boolean haptics() { return sp.getBoolean("haptics", true); }
     boolean autoAdd() { return sp.getBoolean("autoAdd", true); }
+    String iconPack() { return sp.getString("iconPack", IconPacks.BUILTIN); }
+    boolean topGestures() { return sp.getBoolean("topGestures", true); }
+    boolean notifBadges() { return sp.getBoolean("notifBadges", true); }
     int wallpaper() { return sp.getInt("wallpaper", 0); } // 0..5 preset, -1 = kustom
     int tint() { return TINTS[U.clamp(sp.getInt("tint", 0), 0, TINTS.length - 1)]; }
     int tintIndex() { return U.clamp(sp.getInt("tint", 0), 0, TINTS.length - 1); }
@@ -36,6 +39,7 @@ final class Prefs {
 
     void put(String k, int v) { sp.edit().putInt(k, v).apply(); }
     void put(String k, boolean v) { sp.edit().putBoolean(k, v).apply(); }
+    void put(String k, String v) { sp.edit().putString(k, v).apply(); }
     void bumpWallpaper() { put("wallpaperRev", wallpaperRev() + 1); }
 
     boolean isDark(Context c) {
@@ -50,6 +54,7 @@ final class Prefs {
     String signature(Context c) {
         return theme() + "|" + iconStyle() + "|" + cols() + "|" + iconScale() + "|" + labels() + "|" + showDock()
                 + "|" + blur() + "|" + glassOpacity() + "|" + reduceTransparency() + "|" + reduceMotion()
-                + "|" + wallpaper() + "|" + tintIndex() + "|" + wallpaperRev() + "|" + layoutRev() + "|" + isDark(c);
+                + "|" + wallpaper() + "|" + tintIndex() + "|" + wallpaperRev() + "|" + layoutRev() + "|" + isDark(c)
+                + "|" + iconPack() + "|" + notifBadges();
     }
 }

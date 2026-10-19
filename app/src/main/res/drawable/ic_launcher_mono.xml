@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Monokrom (ikon bertema Android 13+): rumah + "27", dalam zona aman 66dp -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:pathData="M54,30 C66,30 76,40 76,54 C76,68 66,78 54,78 C42,78 32,68 32,54 C32,40 42,30 54,30z"
-        android:strokeColor="#FF000000" android:strokeWidth="3" android:fillColor="#00000000" />
-    <path android:pathData="M60,46 C60,42 56,41 53,41 C49,41 46,43 46,47 C46,53 60,52 60,59 C60,63 57,66 53,66 C49,66 46,64 46,60"
-        android:strokeColor="#FF000000" android:strokeWidth="4" android:strokeLineCap="round"
-        android:fillColor="#00000000" />
+    <group android:scaleX="0.86" android:scaleY="0.86" android:pivotX="54" android:pivotY="54" android:translateY="-2">
+    <path android:fillColor="#FF000000" android:fillType="evenOdd"
+        android:pathData="M54,25 C55.2,25 56.3,25.4 57.2,26.2 L79.4,45.2 C80.4,46.1 81,47.3 81,48.6 V62 C81,64.2 79.2,66 77,66 H31 C28.8,66 27,64.2 27,62 V48.6 C27,47.3 27.6,46.1 28.6,45.2 L50.8,26.2 C51.7,25.4 52.8,25 54,25 Z M47.5,66 H60.5 V55.5 C60.5,52.5 58,50.5 54,50.5 C50,50.5 47.5,52.5 47.5,55.5 Z" />
+    <path android:strokeColor="#FF000000" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M38,74.5 C38,71.6 40.2,70.4 42.8,70.4 C45.6,70.4 47.8,71.8 47.8,74.6 C47.8,77.2 45.8,78.8 43.4,80.8 L38,85.4 H48.6 M57.4,70.8 H69.2 L62.4,85.4" />
+    </group>
 </vector>

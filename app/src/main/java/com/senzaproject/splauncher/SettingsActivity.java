@@ -2,6 +2,8 @@ package com.senzaproject.splauncher;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.NotificationManager;
+import android.appwidget.AppWidgetHost;
 import android.app.role.RoleManager;
 import android.content.Context;
 import android.content.Intent;
@@ -27,10 +29,14 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** Pengaturan SP Launcher + bagian Tentang. */
 public class SettingsActivity extends Activity {
     static final String DEVELOPER = "SenzaProject";
     static final String EMAIL = "senzaproject98@gmail.com";
+    static final String SUPPORT_URL = "https://t.me/senzaproject";
 
     private static final int REQ_ROLE = 11, REQ_IMAGE = 12;
 
@@ -38,7 +44,7 @@ public class SettingsActivity extends Activity {
     private boolean dark;
     private int bg, card, fg, sub, line, accent;
     private LinearLayout page;
-    private TextView defaultStatus;
+    private TextView defaultStatus, packStatus, notifStatus, writeStatus, dndStatus;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -58,6 +64,7 @@ public class SettingsActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         refreshDefault();
+        refreshAccess();
     }
 
     private int dp(float v) { return U.dp(this, v); }
@@ -102,6 +109,8 @@ public class SettingsActivity extends Activity {
         c1.addView(divider());
         c1.addView(tintRow());
         c1.addView(divider());
+        c1.addView(iconPackRow());
+        c1.addView(divider());
         c1.addView(segmented("Kolom Ikon", "cols", new String[]{"4", "5", "6"}, new int[]{4, 5, 6}, prefs.cols()));
         c1.addView(divider());
         c1.addView(seek("Ukuran Ikon", "iconScale", 70, 130, prefs.iconScale(), "%"));
@@ -140,6 +149,35 @@ public class SettingsActivity extends Activity {
         c4.addView(divider());
         c4.addView(action("Reset Susunan Home Screen", new Runnable() { @Override public void run() { confirmReset(); } }, 0xFFFF453A));
         page.addView(c4);
+
+        // --- Widget, notifikasi, Control Center
+        section("WIDGET, NOTIFIKASI & CONTROL CENTER");
+        LinearLayout c5 = card();
+        c5.addView(toggle("Gestur Tarik dari Atas", "topGestures", prefs.topGestures()));
+        c5.addView(note("Tarik ke bawah dari bagian atas Home: sisi kiri/tengah membuka Pusat Notifikasi, sisi kanan "
+                + "membuka Control Center. Tarik dari bagian tengah layar untuk pencarian."));
+        c5.addView(divider());
+        notifStatus = new TextView(this);
+        c5.addView(statusRow("Akses Notifikasi", notifStatus, new Runnable() {
+            @Override public void run() { open(NotificationCenter.accessSettingsIntent()); }
+        }));
+        c5.addView(divider());
+        c5.addView(toggle("Badge Notifikasi pada Ikon", "notifBadges", prefs.notifBadges()));
+        c5.addView(divider());
+        writeStatus = new TextView(this);
+        c5.addView(statusRow("Ubah Setelan Sistem (kecerahan)", writeStatus, new Runnable() {
+            @Override public void run() {
+                open(new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:" + getPackageName())));
+            }
+        }));
+        c5.addView(divider());
+        dndStatus = new TextView(this);
+        c5.addView(statusRow("Akses Jangan Ganggu (Fokus)", dndStatus, new Runnable() {
+            @Override public void run() { open(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)); }
+        }));
+        c5.addView(note("Android tidak mengizinkan aplikasi biasa menyalakan/mematikan Wi-Fi, Bluetooth, data seluler, "
+                + "atau mode pesawat secara langsung. Ubin tersebut menampilkan status dan membuka panel sistem."));
+        page.addView(c5);
 
         // --- Tentang
         section("TENTANG");
@@ -365,7 +403,7 @@ public class SettingsActivity extends Activity {
         head.addView(names);
         c.addView(head);
 
-        String ver = "1.0.0", build = "1";
+        String ver = "1.1.0", build = "2";
         try {
             PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
             ver = pi.versionName;
@@ -387,16 +425,126 @@ public class SettingsActivity extends Activity {
         c.addView(info("Android Minimum", "Android 14 (API 34)", null));
         c.addView(divider());
         TextView notes = text("Keterangan versi " + ver + "\n"
-                + "• Home Screen dengan grid, halaman, Dock, dan folder\n"
-                + "• Mode edit: seret ikon, buat folder, hapus dari Home\n"
-                + "• App Library per kategori dan pencarian aplikasi\n"
-                + "• Efek Liquid Glass (blur, tint, sorot tepi) dan 4 gaya ikon\n"
-                + "• Personalisasi tema, wallpaper, ukuran ikon, dan animasi\n\n"
-                + "Segera hadir: widget, Control Center, pusat notifikasi, backup & restore, paket ikon.\n\n"
-                + "Launcher ini terinspirasi tampilan iOS dan bukan produk resmi Apple.", 13.5f, sub, false);
-        notes.setPadding(dp(16), dp(12), dp(16), dp(16));
+                + "\u2022 Widget: jam analog & digital, tanggal, kalender, baterai, pencarian, plus widget dari aplikasi lain\n"
+                + "\u2022 Control Center: kecerahan, volume, senter, kunci rotasi, Fokus, media, dan pintasan\n"
+                + "\u2022 Pusat Notifikasi dengan kartu geser-untuk-hapus dan badge pada ikon\n"
+                + "\u2022 Paket ikon bergaya iOS 27 (bawaan) dan dukungan paket ikon pihak ketiga\n"
+                + "\u2022 Perbaikan panel folder/kategori yang tampak setengah berwarna\n\n"
+                + "Segera hadir: backup & restore susunan Home.", 13.5f, sub, false);
+        notes.setPadding(dp(16), dp(12), dp(16), dp(12));
         c.addView(notes);
+        c.addView(supportButton());
         return c;
+    }
+
+    /** Tombol "Support me" yang membuka Telegram SenzaProject. */
+    private View supportButton() {
+        TextView t = text("Support me", 16, 0xFFFFFFFF, true);
+        t.setGravity(Gravity.CENTER);
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(accent);
+        g.setCornerRadius(dp(12));
+        t.setBackground(g);
+        t.setContentDescription("Support me, buka Telegram SenzaProject");
+        t.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(SUPPORT_URL)));
+                } catch (Throwable e) {
+                    Toast.makeText(SettingsActivity.this, SUPPORT_URL, Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(48));
+        lp.setMargins(dp(16), dp(4), dp(16), dp(16));
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    /** Baris pilihan paket ikon: tampilkan pilihan sekarang, ketuk untuk memilih. */
+    private View iconPackRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(16), dp(12), dp(16), dp(12));
+        row.setMinimumHeight(dp(50));
+        row.addView(text("Paket Ikon", 16, fg, false), new LinearLayout.LayoutParams(0, -2, 1f));
+        packStatus = text(IconPacks.labelOf(this, prefs.iconPack()), 15, accent, false);
+        packStatus.setGravity(Gravity.END);
+        row.addView(packStatus, new LinearLayout.LayoutParams(0, -2, 1.4f));
+        row.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { chooseIconPack(); } });
+        return row;
+    }
+
+    private void chooseIconPack() {
+        final ArrayList<String> ids = new ArrayList<>();
+        final ArrayList<String> names = new ArrayList<>();
+        ids.add(IconPacks.BUILTIN); names.add(IconPacks.labelOf(this, IconPacks.BUILTIN));
+        ids.add(IconPacks.NONE); names.add(IconPacks.labelOf(this, IconPacks.NONE));
+        List<IconPacks.PackInfo> installed = IconPacks.installed(this);
+        for (IconPacks.PackInfo pi : installed) { ids.add(pi.pkg); names.add(pi.label); }
+        int sel = Math.max(0, ids.indexOf(prefs.iconPack()));
+        new AlertDialog.Builder(this)
+                .setTitle("Paket Ikon")
+                .setSingleChoiceItems(names.toArray(new String[0]), sel, new android.content.DialogInterface.OnClickListener() {
+                    @Override public void onClick(android.content.DialogInterface d, int which) {
+                        prefs.put("iconPack", ids.get(which));
+                        IconPacks.forget();
+                        packStatus.setText(names.get(which));
+                        d.dismiss();
+                    }
+                })
+                .setNegativeButton("Batal", null)
+                .show();
+        if (installed.isEmpty()) {
+            Toast.makeText(this, "Paket ikon pihak ketiga (format ADW/Nova) yang terpasang akan muncul di daftar.",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private TextView note(String s) {
+        TextView t = text(s, 12.5f, sub, false);
+        t.setPadding(dp(16), 0, dp(16), dp(12));
+        return t;
+    }
+
+    /** Baris dengan status "Aktif"/"Nonaktif" di kanan; ketuk membuka pengaturan sistem terkait. */
+    private View statusRow(String label, TextView status, final Runnable onClick) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(16), dp(12), dp(16), dp(12));
+        row.setMinimumHeight(dp(50));
+        row.addView(text(label, 16, fg, false), new LinearLayout.LayoutParams(0, -2, 1f));
+        status.setTextSize(15f);
+        status.setGravity(Gravity.END);
+        row.addView(status, new LinearLayout.LayoutParams(-2, -2));
+        row.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { onClick.run(); } });
+        return row;
+    }
+
+    private void open(Intent i) {
+        try { startActivity(i); } catch (Throwable t) { Toast.makeText(this, "Tidak dapat membuka pengaturan", Toast.LENGTH_SHORT).show(); }
+    }
+
+    private void setStatus(TextView t, boolean on) {
+        if (t == null) return;
+        t.setText(on ? "Aktif" : "Nonaktif");
+        t.setTextColor(on ? 0xFF30D158 : sub);
+    }
+
+    private void refreshAccess() {
+        setStatus(notifStatus, NotificationService.isEnabled(this));
+        boolean w = false;
+        try { w = Settings.System.canWrite(this); } catch (Throwable ignored) { }
+        setStatus(writeStatus, w);
+        boolean d = false;
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            d = nm != null && nm.isNotificationPolicyAccessGranted();
+        } catch (Throwable ignored) { }
+        setStatus(dndStatus, d);
+        if (packStatus != null) packStatus.setText(IconPacks.labelOf(this, prefs.iconPack()));
     }
 
     private View info(String k, String v, final Runnable onClick) {
@@ -472,11 +620,18 @@ public class SettingsActivity extends Activity {
     private void confirmReset() {
         new AlertDialog.Builder(this)
                 .setTitle("Reset Home Screen?")
-                .setMessage("Susunan ikon, folder, dan Dock dikembalikan ke awal. Aplikasi Anda tidak dihapus.")
+                .setMessage("Susunan ikon, folder, widget, dan Dock dikembalikan ke awal. Aplikasi Anda tidak dihapus.")
                 .setNegativeButton("Batal", null)
                 .setPositiveButton("Reset", new android.content.DialogInterface.OnClickListener() {
                     @Override public void onClick(android.content.DialogInterface d, int w) {
-                        new LayoutStore(SettingsActivity.this).reset();
+                        LayoutStore st = new LayoutStore(SettingsActivity.this);
+                        if (st.load()) {
+                            try {
+                                AppWidgetHost host = new AppWidgetHost(SettingsActivity.this, LauncherActivity.HOST_ID);
+                                for (LayoutStore.Item ew : st.externalWidgets()) host.deleteAppWidgetId(ew.wid);
+                            } catch (Throwable ignored) { }
+                        }
+                        st.reset();
                         prefs.bumpLayout();
                         Toast.makeText(SettingsActivity.this, "Susunan Home Screen direset", Toast.LENGTH_SHORT).show();
                     }

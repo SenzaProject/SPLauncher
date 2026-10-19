@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- generated: tools/glyphs.py (gear) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M10.03,4.66 L10.64,2.3 L13.36,2.3 L13.97,4.66 A7.6,7.6 0 0 1 15.8,5.42 L17.9,4.17 L19.83,6.1 L18.58,8.2 A7.6,7.6 0 0 1 19.34,10.03 L21.7,10.64 L21.7,13.36 L19.34,13.97 A7.6,7.6 0 0 1 18.58,15.8 L19.83,17.9 L17.9,19.83 L15.8,18.58 A7.6,7.6 0 0 1 13.97,19.34 L13.36,21.7 L10.64,21.7 L10.03,19.34 A7.6,7.6 0 0 1 8.2,18.58 L6.1,19.83 L4.17,17.9 L5.42,15.8 A7.6,7.6 0 0 1 4.66,13.97 L2.3,13.36 L2.3,10.64 L4.66,10.03 A7.6,7.6 0 0 1 5.42,8.2 L4.17,6.1 L6.1,4.17 L8.2,5.42 A7.6,7.6 0 0 1 10.03,4.66 Z M8.7,12 a3.3,3.3 0 1,0 6.6,0 a3.3,3.3 0 1,0 -6.6,0 Z"/>
+</vector>

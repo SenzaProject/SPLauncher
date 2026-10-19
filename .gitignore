@@ -1,4 +1,10 @@
+# hasil build
 build/
 out/
+# KUNCI TANDA TANGAN: jangan pernah di-commit (password-nya tertulis di build.sh)
 *.p12
 *.jks
+*.keystore
+# toolchain unduhan
+sp-toolchain/
+.DS_Store

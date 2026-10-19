@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- generated: tools/glyphs.py (bell) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12,3 C8.6,3 7,5.7 7,9 V12 L5,16 H19 L17,12 V9 C17,5.7 15.4,3 12,3 Z"/>
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.9" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M9.8,18.6 A2.4,2.4 0 0 0 14.2,18.6"/>
+</vector>

@@ -13,7 +13,12 @@ final class Workspace extends ViewGroup {
     interface Listener {
         void onScrollFraction(float pos);
         void onPageSettled(int page);
-        void onPullDown(float x, float y);
+        /** Tarik ke bawah dimulai di (x, y) koordinat Workspace. */
+        void onPullBegin(float x, float y);
+        /** dy = jarak tarik dari titik awal (piksel). */
+        void onPullMove(float dy);
+        /** Jari dilepas; vy = kecepatan vertikal (px/detik), cancelled bila sentuhan dibatalkan. */
+        void onPullEnd(float dy, float vy, boolean cancelled);
         void onEmptyLongPress(float x, float y);
     }
 
@@ -128,6 +133,7 @@ final class Workspace extends ViewGroup {
                     if (pullEnabled && listener != null && dy > slop * 2 && dy > Math.abs(dx) * 1.5f
                             && page < homeCount) {
                         state = PULLING; removeCallbacks(longPress);
+                        listener.onPullBegin(downX, downY);
                         return true;
                     }
                 }
@@ -160,6 +166,7 @@ final class Workspace extends ViewGroup {
                         removeCallbacks(longPress);
                     }
                 }
+                if (state == PULLING && listener != null) listener.onPullMove(e.getY() - downY);
                 if (state == SCROLLING) {
                     float d = lastX - e.getX();
                     lastX = e.getX();
@@ -185,10 +192,7 @@ final class Workspace extends ViewGroup {
                     smoothTo(target);
                 } else if (state == PULLING) {
                     vt.computeCurrentVelocity(1000);
-                    float dy = e.getY() - downY;
-                    if ((dy > U.dpf(getContext(), 70) || vt.getYVelocity() > 1200) && listener != null) {
-                        listener.onPullDown(downX, downY);
-                    }
+                    if (listener != null) listener.onPullEnd(e.getY() - downY, vt.getYVelocity(), false);
                 }
                 state = IDLE;
                 release();
@@ -197,6 +201,7 @@ final class Workspace extends ViewGroup {
             case MotionEvent.ACTION_CANCEL:
                 removeCallbacks(longPress);
                 if (state == SCROLLING) smoothTo(Math.round(getScrollX() / (float) Math.max(1, getWidth())));
+                if (state == PULLING && listener != null) listener.onPullEnd(e.getY() - downY, 0f, true);
                 state = IDLE;
                 release();
                 return true;

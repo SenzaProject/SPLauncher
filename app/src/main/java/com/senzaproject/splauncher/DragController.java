@@ -3,12 +3,14 @@ package com.senzaproject.splauncher;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.ViewConfiguration;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 
 import java.util.ArrayList;
 
-/** Mengelola seret-dan-lepas ikon di Home Screen dan Dock. */
+/** Mengelola seret-dan-lepas ikon, folder, dan widget di Home Screen (Dock hanya untuk ikon/folder). */
 final class DragController {
     private static final int IDLE = 0, ARMED = 1, DRAGGING = 2, DROPPING = 3;
     private static final int NONE = -2, DOCK = -1;
@@ -18,7 +20,7 @@ final class DragController {
     private final float slop;
 
     private int state = IDLE;
-    private IconView src, proxy;
+    private View src, proxy;
     private LayoutStore.Item item;
     private ArrayList<LayoutStore.Item> srcList;
     private float fingerX, fingerY, startX, startY, offX, offY;
@@ -34,7 +36,9 @@ final class DragController {
     private final Runnable hoverRun = new Runnable() {
         @Override public void run() {
             if (state != DRAGGING || curLayout == null || hoverIdx < 0 || hoverIdx >= curLayout.getChildCount()) return;
-            mergeView = (IconView) curLayout.getChildAt(hoverIdx);
+            View v = curLayout.getChildAt(hoverIdx);
+            if (!(v instanceof IconView)) return;
+            mergeView = (IconView) v;
             mergeTarget = mergeView.item;
             mergeView.setMerge(true);
             a.haptic(mergeView);
@@ -68,13 +72,18 @@ final class DragController {
 
     boolean active() { return state != IDLE; }
 
-    /** Dipanggil saat tekan-lama pada ikon Home. immediate=true pada mode edit. */
-    void arm(IconView v, boolean immediate) {
-        if (state != IDLE || v.item == null) return;
-        src = v;
-        item = v.item;
+    private int spanW() { return item.type == LayoutStore.WIDGET ? Math.max(1, item.spanW) : 1; }
+    private int spanH() { return item.type == LayoutStore.WIDGET ? Math.max(1, item.spanH) : 1; }
+
+    /** Dipanggil saat tekan-lama pada ikon/widget Home. immediate=true pada mode edit. */
+    void arm(View v, boolean immediate) {
+        if (state != IDLE || !(v instanceof ItemHolder)) return;
+        LayoutStore.Item it = ((ItemHolder) v).getItem();
+        if (it == null) return;
         int pg = a.pageIndexOf(v);
         if (pg == -2) return;
+        src = v;
+        item = it;
         srcList = pg == -1 ? a.store.dock : a.store.pages.get(pg);
         float[] p = a.toRoot(a.lastRawX, a.lastRawY);
         startX = fingerX = p[0];
@@ -113,23 +122,40 @@ final class DragController {
         if (!a.isEdit()) a.enterEdit();
         int[] loc = new int[2];
         src.getLocationInWindow(loc);
-        proxy = new IconView(a);
-        a.bindIcon(proxy, item, a.pageIndexOf(src) == -1);
-        proxy.setClickable(false);
+        float scale;
+        if (src instanceof WidgetCell) {
+            ImageView iv = new ImageView(a);
+            iv.setImageBitmap(((WidgetCell) src).snapshot());
+            iv.setScaleType(ImageView.ScaleType.FIT_XY);
+            proxy = iv;
+            scale = 1.04f;
+        } else {
+            IconView ip = new IconView(a);
+            a.bindIcon(ip, item, a.pageIndexOf(src) == -1);
+            ip.setClickable(false);
+            proxy = ip;
+            scale = 1.14f;
+        }
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(src.getWidth(), src.getHeight());
         a.dragLayer.addView(proxy, lp);
         proxy.setX(loc[0]);
         proxy.setY(loc[1]);
-        proxy.setScaleX(1.14f);
-        proxy.setScaleY(1.14f);
+        proxy.setScaleX(scale);
+        proxy.setScaleY(scale);
         proxy.setAlpha(0.94f);
         proxy.setElevation(U.dpf(a, 12));
+        glassOffset();
         offX = loc[0] + src.getWidth() / 2f - fingerX;
         offY = loc[1] + src.getHeight() / 2f - fingerY;
         src.setAlpha(0f);
         state = DRAGGING;
         a.haptic(src);
         move();
+    }
+
+    /** Proxy dipindah dengan translasi: beri tahu backdrop kaca posisi tampil sebenarnya. */
+    private void glassOffset() {
+        if (proxy instanceof IconView) ((IconView) proxy).setGlassOffset(Math.round(proxy.getX()), Math.round(proxy.getY()));
     }
 
     private void resetHover() {
@@ -143,11 +169,13 @@ final class DragController {
         float cx = fingerX + offX, cy = fingerY + offY;
         proxy.setX(cx - proxy.getWidth() / 2f);
         proxy.setY(cy - proxy.getHeight() / 2f);
+        glassOffset();
 
         // tentukan target
         CellLayout target = null;
         int where = NONE;
-        if (a.dockEnabled() && cy > a.dockTop() - U.dpf(a, 6)) {
+        boolean dockOk = item.type != LayoutStore.WIDGET;
+        if (dockOk && a.dockEnabled() && cy > a.dockTop() - U.dpf(a, 6)) {
             target = a.dockLayout; where = DOCK;
         } else {
             int pg = a.workspace.page();
@@ -177,7 +205,6 @@ final class DragController {
         if (curLayout == null) return;
         float[] lp = a.toLocal(curLayout, cx, cy);
         int srcChild = same ? curLayout.indexOfChild(src) : -1;
-        int remaining = curLayout.getChildCount() - (same ? 1 : 0);
 
         int zone = item.type == LayoutStore.APP ? curLayout.hitZone(lp[0], lp[1], srcChild) : -1;
         if (zone >= 0) {
@@ -188,10 +215,10 @@ final class DragController {
             }
         } else {
             if (hoverIdx != -1 || mergeView != null) resetHover();
-            int ni = Math.min(curLayout.indexAt(lp[0], lp[1]), remaining);
+            int ni = curLayout.insertIndexFor(lp[0], lp[1], srcChild, spanW(), spanH());
             if (ni != insertIdx) {
                 insertIdx = ni;
-                curLayout.preview(srcChild, ni);
+                curLayout.preview(srcChild, ni, spanW(), spanH());
             }
         }
     }
@@ -202,7 +229,6 @@ final class DragController {
         if (curLayout == null || curWhere == NONE) { revert(); return; }
         final ArrayList<LayoutStore.Item> dest = curWhere == DOCK ? a.store.dock : a.store.pages.get(curWhere);
         float tx, ty, ts = 1f, ta = 0.94f;
-        boolean merged = false;
         if (mergeTarget != null && mergeView != null && mergeView.getParent() == curLayout && item.type == LayoutStore.APP) {
             int[] ml = new int[2];
             mergeView.getLocationInWindow(ml);
@@ -217,13 +243,17 @@ final class DragController {
             } else if (!mergeTarget.kids.contains(item.key)) {
                 mergeTarget.kids.add(item.key);
             }
-            merged = true;
         } else {
+            boolean same = curLayout == src.getParent();
+            int srcChild = same ? curLayout.indexOfChild(src) : -1;
             int idx = insertIdx < 0 ? dest.size() : insertIdx;
+            if (same && insertIdx < 0) idx = Math.max(0, dest.size() - 1);
+            int slot = curLayout.slotForInsert(srcChild, idx, spanW(), spanH());
+            if (slot < 0) slot = Math.max(0, curLayout.slotOfChild(Math.max(0, curLayout.getChildCount() - 1)));
             int[] cl = new int[2];
             curLayout.getLocationInWindow(cl);
-            tx = cl[0] + curLayout.slotX(idx);
-            ty = cl[1] + curLayout.slotY(idx);
+            tx = cl[0] + curLayout.slotX(slot) + (src.getWidth() - proxy.getWidth()) / 2f;
+            ty = cl[1] + curLayout.slotY(slot) + (src.getHeight() - proxy.getHeight()) / 2f;
             srcList.remove(item);
             dest.add(Math.min(idx, dest.size()), item);
         }
@@ -238,7 +268,7 @@ final class DragController {
                         resetHover();
                         curLayout = null;
                         insertIdx = -1;
-                        a.store.normalize(a.pageCap, a.dockCap);
+                        a.store.normalize(a.cols, a.rows, a.dockCap);
                         a.store.save();
                         a.rebuildAll();
                     }

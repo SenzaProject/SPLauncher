@@ -76,6 +76,9 @@ final class AppRepo {
         });
         apps = list;
         byKey = map;
+        try {
+            if (IconPacks.rebuild(ctx, list)) IconFactory.clear();
+        } catch (Throwable ignored) { }
     }
 
     List<AppInfo> all() { return apps; }

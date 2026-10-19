@@ -17,16 +17,31 @@ import java.util.List;
 
 /** Model susunan Home Screen: halaman, Dock, folder. Disimpan sebagai JSON. */
 final class LayoutStore {
-    static final int APP = 0, FOLDER = 1;
+    static final int APP = 0, FOLDER = 1, WIDGET = 2;
+    /** Jenis widget bawaan; selain ini berarti widget eksternal (AppWidgetProvider) dengan wid/wprov. */
+    static final String W_EXT = "ext";
 
     static final class Item {
         int type;
         String key;                 // APP: "pkg/cls"
         String title = "Folder";    // FOLDER
         ArrayList<String> kids = new ArrayList<>();
+        // WIDGET
+        String wkind;               // "clock_analog", "clock_digital", "date", "month", "battery", "search", atau W_EXT
+        int spanW = 1, spanH = 1;   // ukuran dalam sel grid
+        int wid = -1;               // appWidgetId (widget eksternal)
+        String wprov;               // ComponentName.flattenToString() (widget eksternal)
 
         static Item app(String key) { Item i = new Item(); i.type = APP; i.key = key; return i; }
         static Item folder(String title) { Item i = new Item(); i.type = FOLDER; i.title = title; return i; }
+        static Item widget(String kind, int sw, int sh) {
+            Item i = new Item(); i.type = WIDGET; i.wkind = kind; i.spanW = sw; i.spanH = sh; return i;
+        }
+        static Item external(int appWidgetId, String provider, int sw, int sh) {
+            Item i = widget(W_EXT, sw, sh); i.wid = appWidgetId; i.wprov = provider; return i;
+        }
+        boolean isWidget() { return type == WIDGET; }
+        boolean isExternal() { return type == WIDGET && W_EXT.equals(wkind); }
     }
 
     final ArrayList<ArrayList<Item>> pages = new ArrayList<>();
@@ -79,7 +94,13 @@ final class LayoutStore {
         ArrayList<Item> l = new ArrayList<>();
         for (int i = 0; i < a.length(); i++) {
             JSONObject o = a.getJSONObject(i);
-            if (o.getInt("t") == FOLDER) {
+            if (o.getInt("t") == WIDGET) {
+                Item w = Item.widget(o.optString("k", ""), Math.max(1, o.optInt("w", 2)), Math.max(1, o.optInt("h", 2)));
+                w.wid = o.optInt("i", -1);
+                w.wprov = o.optString("p", null);
+                if (w.wkind.isEmpty()) continue;
+                l.add(w);
+            } else if (o.getInt("t") == FOLDER) {
                 Item f = Item.folder(o.optString("n", "Folder"));
                 JSONArray c = o.getJSONArray("c");
                 for (int j = 0; j < c.length(); j++) f.kids.add(c.getString(j));
@@ -96,7 +117,13 @@ final class LayoutStore {
         for (Item it : l) {
             JSONObject o = new JSONObject();
             o.put("t", it.type);
-            if (it.type == FOLDER) {
+            if (it.type == WIDGET) {
+                o.put("k", it.wkind);
+                o.put("w", it.spanW);
+                o.put("h", it.spanH);
+                if (it.wid >= 0) o.put("i", it.wid);
+                if (it.wprov != null) o.put("p", it.wprov);
+            } else if (it.type == FOLDER) {
                 o.put("n", it.title);
                 JSONArray c = new JSONArray();
                 for (String k : it.kids) c.put(k);
@@ -166,10 +193,10 @@ final class LayoutStore {
     }
 
     /** Muat dari penyimpanan atau buat awal; lalu sinkronkan dengan aplikasi terpasang. */
-    void ensure(Context c, AppRepo repo, Prefs prefs, int cap, int dockCap) {
-        if (!loaded && !load()) createInitial(c, repo, cap, dockCap);
+    void ensure(Context c, AppRepo repo, Prefs prefs, int cols, int rows, int dockCap) {
+        if (!loaded && !load()) createInitial(c, repo, cols * rows, dockCap);
         sync(repo, prefs);
-        normalize(cap, dockCap);
+        normalize(cols, rows, dockCap);
         save();
     }
 
@@ -194,13 +221,15 @@ final class LayoutStore {
 
     private static void collectKeys(List<Item> l, HashSet<String> out) {
         for (Item it : l) {
-            if (it.type == APP) out.add(it.key); else out.addAll(it.kids);
+            if (it.type == APP) out.add(it.key);
+            else if (it.type == FOLDER) out.addAll(it.kids);
         }
     }
 
     private static void cleanList(ArrayList<Item> l, AppRepo repo) {
         for (int i = l.size() - 1; i >= 0; i--) {
             Item it = l.get(i);
+            if (it.type == WIDGET) continue;
             if (it.type == APP) {
                 if (repo.get(it.key) == null) l.remove(i);
             } else {
@@ -211,9 +240,27 @@ final class LayoutStore {
         }
     }
 
-    /** Pastikan kapasitas halaman/dock terpenuhi; limpahan dipindah ke halaman berikutnya. */
-    void normalize(int cap, int dockCap) {
-        cap = Math.max(1, cap);
+    /** Apakah daftar item muat pada grid cols x rows (memperhitungkan ukuran widget)? */
+    static boolean pageFits(List<Item> items, int cols, int rows) {
+        int n = items.size();
+        int[] sw = new int[n], sh = new int[n];
+        for (int i = 0; i < n; i++) { sw[i] = items.get(i).spanW; sh[i] = items.get(i).spanH; }
+        return GridPacker.fits(cols, rows, sw, sh);
+    }
+
+    /**
+     * Pastikan susunan halaman/dock muat; limpahan dipindah ke awal halaman berikutnya.
+     * Widget tidak boleh berada di Dock (dipindah ke halaman pertama).
+     */
+    void normalize(int cols, int rows, int dockCap) {
+        cols = Math.max(1, cols); rows = Math.max(1, rows);
+        for (int i = dock.size() - 1; i >= 0; i--) {
+            if (dock.get(i).type == WIDGET) {
+                Item w = dock.remove(i);
+                if (pages.isEmpty()) pages.add(new ArrayList<Item>());
+                pages.get(0).add(0, w);
+            }
+        }
         while (dock.size() > dockCap) {
             Item ov = dock.remove(dock.size() - 1);
             if (pages.isEmpty()) pages.add(new ArrayList<Item>());
@@ -221,7 +268,7 @@ final class LayoutStore {
         }
         for (int i = 0; i < pages.size(); i++) {
             ArrayList<Item> p = pages.get(i);
-            while (p.size() > cap) {
+            while (p.size() > 1 && !pageFits(p, cols, rows)) {
                 Item ov = p.remove(p.size() - 1);
                 if (i + 1 >= pages.size()) pages.add(new ArrayList<Item>());
                 pages.get(i + 1).add(0, ov);
@@ -272,5 +319,36 @@ final class LayoutStore {
         if (isOnHome(key)) return;
         if (pages.isEmpty()) pages.add(new ArrayList<Item>());
         pages.get(pages.size() - 1).add(Item.app(key));
+    }
+
+    /**
+     * Tempatkan widget: coba halaman pilihan dulu, lalu halaman lain, terakhir buat halaman baru.
+     * @return indeks halaman tempat widget ditaruh
+     */
+    int addWidget(Item w, int preferred, int cols, int rows) {
+        if (pages.isEmpty()) pages.add(new ArrayList<Item>());
+        int n = pages.size();
+        int start = U.clamp(preferred, 0, n - 1);
+        for (int k = 0; k < n; k++) {
+            int pg = (start + k) % n;
+            ArrayList<Item> p = pages.get(pg);
+            ArrayList<Item> test = new ArrayList<>(p);
+            test.add(w);
+            if (pageFits(test, cols, rows)) { p.add(w); return pg; }
+        }
+        ArrayList<Item> np = new ArrayList<>();
+        np.add(w);
+        pages.add(np);
+        return pages.size() - 1;
+    }
+
+    /** Ganti ukuran widget; bila halaman jadi tidak muat, limpahan dipindah oleh normalize(). */
+    void resizeWidget(Item w, int sw, int sh) { w.spanW = Math.max(1, sw); w.spanH = Math.max(1, sh); }
+
+    /** Semua widget eksternal (untuk membersihkan appWidgetId yatim). */
+    ArrayList<Item> externalWidgets() {
+        ArrayList<Item> out = new ArrayList<>();
+        for (ArrayList<Item> p : pages) for (Item it : p) if (it.isExternal()) out.add(it);
+        return out;
     }
 }

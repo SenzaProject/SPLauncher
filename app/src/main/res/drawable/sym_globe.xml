@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- generated: tools/glyphs.py (globe) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M3,12 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 Z"/>
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,3 C14.6,5.4 15.8,8.6 15.8,12 C15.8,15.4 14.6,18.6 12,21 C9.4,18.6 8.2,15.4 8.2,12 C8.2,8.6 9.4,5.4 12,3 Z"/>
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M3,12 H21"/>
+</vector>

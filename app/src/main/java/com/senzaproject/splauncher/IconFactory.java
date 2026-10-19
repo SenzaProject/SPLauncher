@@ -33,25 +33,29 @@ final class IconFactory {
     private static final ExecutorService EXEC = Executors.newFixedThreadPool(2);
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
-    static String cacheKey(AppRepo.AppInfo a, int size, int style, int tint, boolean dark) {
+    static String cacheKey(AppRepo.AppInfo a, int size, int style, int tint, boolean dark, String pack) {
         return a.key + "|" + size + "|" + style + "|" + (style == Prefs.STYLE_TINTED ? tint : 0) + "|"
-                + (style == Prefs.STYLE_DARK ? dark : false);
+                + (style == Prefs.STYLE_DARK ? dark : false) + "|" + pack;
     }
 
+    /** Buang seluruh cache ikon (mis. setelah paket ikon / peran aplikasi berubah). */
+    static void clear() { CACHE.evictAll(); }
+
     static Bitmap peek(AppRepo.AppInfo a, int size, Prefs p, boolean dark) {
-        return CACHE.get(cacheKey(a, size, p.iconStyle(), p.tint(), dark));
+        return CACHE.get(cacheKey(a, size, p.iconStyle(), p.tint(), dark, p.iconPack()));
     }
 
     static void load(final AppRepo.AppInfo a, final int size, final Prefs p, final boolean dark, final Callback cb) {
         final int style = p.iconStyle();
         final int tint = p.tint();
-        final String key = cacheKey(a, size, style, tint, dark);
+        final String pack = p.iconPack();
+        final String key = cacheKey(a, size, style, tint, dark, pack);
         Bitmap hit = CACHE.get(key);
         if (hit != null) { cb.onIcon(hit); return; }
         EXEC.execute(new Runnable() {
             @Override public void run() {
                 Bitmap b = null;
-                try { b = make(a, size, style, tint, dark); } catch (Throwable ignored) { }
+                try { b = make(a, size, style, tint, dark, pack); } catch (Throwable ignored) { }
                 if (b == null) return;
                 CACHE.put(key, b);
                 final Bitmap fb = b;
@@ -76,12 +80,41 @@ final class IconFactory {
         return path;
     }
 
-    private static Bitmap make(AppRepo.AppInfo a, int size, int style, int tint, boolean dark) {
+    private static Bitmap make(AppRepo.AppInfo a, int size, int style, int tint, boolean dark, String pack) {
         Drawable d = a.lai.getIcon(0);
         if (d == null) return null;
+        Path sq = squircle(size);
+        boolean ios = IconPacks.BUILTIN.equals(pack);
+
+        // 1) paket pihak ketiga (appfilter.xml)
+        if (!ios && !IconPacks.NONE.equals(pack)) {
+            IconPacks.External ext = IconPacks.external(ctx(), pack);
+            if (ext != null) {
+                Drawable pd = ext.iconFor(a);
+                Bitmap base = null;
+                if (pd != null) {
+                    base = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+                    pd.setBounds(0, 0, size, size);
+                    pd.draw(new Canvas(base));
+                } else {
+                    base = ext.themed(d, size);
+                }
+                if (base != null) return finish(base, sq, size, style, true, tint, false, false);
+            }
+        }
+
+        // 2) ikon bawaan iOS 27 untuk aplikasi sistem inti
+        if (ios) {
+            IconPacks.Role role = IconPacks.roleFor(a);
+            if (role != null) {
+                Bitmap base = IconPacks.drawRole(role, size);
+                return finish(base, sq, size, style, true, tint, true, true);
+            }
+        }
+
+        // 3) ikon asli aplikasi, dipotong squircle
         Bitmap base = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(base);
-        Path sq = squircle(size);
         cv.save();
         cv.clipPath(sq);
         if (style == Prefs.STYLE_TINTED && d instanceof AdaptiveIconDrawable
@@ -96,7 +129,7 @@ final class IconFactory {
             mono.setBounds(new Rect(-pad, -pad, size + pad, size + pad));
             mono.draw(cv);
             cv.restore();
-            return finish(base, sq, size, style, false, tint);
+            return finish(base, sq, size, style, false, tint, ios, true);
         }
         if (d instanceof AdaptiveIconDrawable) {
             AdaptiveIconDrawable ad = (AdaptiveIconDrawable) d;
@@ -112,11 +145,14 @@ final class IconFactory {
             d.draw(cv);
         }
         cv.restore();
-        return finish(base, sq, size, style, true, tint);
+        return finish(base, sq, size, style, true, tint, ios, true);
     }
 
+    private static android.content.Context ctx() { return IconPacks.context(); }
+
     /** Terapkan gaya (gelap/kaca/warna) + sorot tepi pada ikon dasar. */
-    private static Bitmap finish(Bitmap base, Path sq, int size, int style, boolean colorize, int tint) {
+    private static Bitmap finish(Bitmap base, Path sq, int size, int style, boolean colorize, int tint,
+                                 boolean gloss, boolean rimOn) {
         Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(out);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
@@ -169,6 +205,19 @@ final class IconFactory {
                 cv.drawBitmap(base, 0, 0, p);
         }
         base.recycle();
+        if (gloss) {
+            // kilau kaca lembut di separuh atas ikon (gaya iOS 27)
+            cv.save();
+            cv.clipPath(sq);
+            Paint gl = new Paint(Paint.ANTI_ALIAS_FLAG);
+            gl.setShader(new LinearGradient(0, 0, 0, size * 0.55f, U.alpha(0xFFFFFFFF, 0.24f), 0x00FFFFFF, Shader.TileMode.CLAMP));
+            cv.drawRect(0, 0, size, size * 0.55f, gl);
+            Paint sh = new Paint(Paint.ANTI_ALIAS_FLAG);
+            sh.setShader(new LinearGradient(0, size * 0.72f, 0, size, 0x00000000, U.alpha(0xFF000000, 0.10f), Shader.TileMode.CLAMP));
+            cv.drawRect(0, size * 0.72f, size, size, sh);
+            cv.restore();
+        }
+        if (!rimOn) return out;
         // sorot tepi
         Paint s = new Paint(Paint.ANTI_ALIAS_FLAG);
         s.setStyle(Paint.Style.STROKE);

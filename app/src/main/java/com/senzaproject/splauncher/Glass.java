@@ -1,11 +1,13 @@
 package com.senzaproject.splauncher;
 
 import android.graphics.Bitmap;
+import android.graphics.BitmapShader;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.LinearGradient;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
@@ -14,6 +16,7 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.view.View;
+import android.view.ViewParent;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,6 +27,12 @@ import java.util.WeakHashMap;
  * Efek Liquid Glass: backdrop wallpaper yang diburamkan + tint + sorot tepi + sheen.
  * Panel mengambil potongan wallpaper-blur sesuai posisinya di jendela sehingga terlihat
  * seperti kaca buram sungguhan di atas wallpaper.
+ *
+ * Perbaikan v1.1: posisi view untuk backdrop dihitung dari posisi LAYOUT (tanpa skala/rotasi/translasi
+ * animasi). Sebelumnya posisi diambil saat view masih diskalakan 0.3x (animasi buka folder), lalu
+ * display list tidak digambar ulang setelah animasi selesai, sehingga bitmap backdrop hanya menutup
+ * sebagian lebar panel (panel tampak setengah berwarna). Backdrop juga kini dipakai lewat BitmapShader
+ * mode CLAMP sehingga tepi panel selalu tertutup walau posisi bergeser beberapa piksel.
  */
 final class Glass {
     private Glass() {}
@@ -33,18 +42,18 @@ final class Glass {
     static boolean reduce;
 
     private static final Set<View> HOSTS = Collections.newSetFromMap(new WeakHashMap<View, Boolean>());
-    private static final Paint BMP = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+    private static final Paint BACK = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
     private static final Paint FILL = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final Paint STROKE = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final Path PATH = new Path();
     private static final RectF RF = new RectF();
-    private static final Rect DST = new Rect();
+    private static final Matrix MAT = new Matrix();
     private static final int[] LOC = new int[2];
 
     static {
         ColorMatrix cm = new ColorMatrix();
         cm.setSaturation(1.35f);
-        BMP.setColorFilter(new ColorMatrixColorFilter(cm));
+        BACK.setColorFilter(new ColorMatrixColorFilter(cm));
         STROKE.setStyle(Paint.Style.STROKE);
     }
 
@@ -55,6 +64,27 @@ final class Glass {
         for (View v : new ArrayList<>(HOSTS)) {
             if (v.isAttachedToWindow()) v.invalidate();
         }
+    }
+
+    /**
+     * Posisi pojok kiri-atas view di jendela, dihitung dari left/top layout dikurangi scroll induk.
+     * Sengaja mengabaikan transformasi (skala/translasi/rotasi) agar hasilnya stabil selama animasi.
+     */
+    static void locate(View v, int[] out) {
+        float x = 0f, y = 0f;
+        View cur = v;
+        for (int guard = 0; guard < 64 && cur != null; guard++) {
+            x += cur.getLeft();
+            y += cur.getTop();
+            ViewParent p = cur.getParent();
+            if (!(p instanceof View)) break;
+            View pv = (View) p;
+            x -= pv.getScrollX();
+            y -= pv.getScrollY();
+            cur = pv;
+        }
+        out[0] = Math.round(x);
+        out[1] = Math.round(y);
     }
 
     static void setBackdrop(Bitmap full, int blurPct, boolean reduceTransparency) {
@@ -77,6 +107,15 @@ final class Glass {
 
     /** Gambar kaca pada area (l,t,r,b) koordinat lokal host. */
     static void paint(Canvas c, View host, float l, float t, float r, float b, float radius, float tint, boolean dark) {
+        paint(c, host, l, t, r, b, radius, tint, dark, 0, 0);
+    }
+
+    /**
+     * @param offX tambahan geser backdrop (piksel jendela); dipakai untuk "proxy" seret yang
+     *             dipindah dengan translasi sehingga posisi layout-nya bukan posisi tampilnya.
+     */
+    static void paint(Canvas c, View host, float l, float t, float r, float b, float radius, float tint, boolean dark,
+                      int offX, int offY) {
         float w = r - l, h = b - t;
         if (w <= 0 || h <= 0) return;
         float density = host.getResources().getDisplayMetrics().density;
@@ -86,13 +125,19 @@ final class Glass {
         PATH.addRoundRect(RF, rad, rad, Path.Direction.CW);
         int save = c.save();
         c.clipPath(PATH);
-        boolean solid = reduce || blurred == null;
+        Bitmap bd = blurred;
+        boolean solid = reduce || bd == null;
         if (!solid) {
-            host.getLocationInWindow(LOC);
-            c.translate(-LOC[0], -LOC[1]);
-            DST.set(0, 0, winW, winH);
-            c.drawBitmap(blurred, null, DST, BMP);
-            c.translate(LOC[0], LOC[1]);
+            locate(host, LOC);
+            // bitmap kecil -> ruang jendela (skala), lalu ruang jendela -> ruang lokal host (geser)
+            MAT.setScale(winW / (float) bd.getWidth(), winH / (float) bd.getHeight());
+            MAT.postTranslate(-(LOC[0] + offX), -(LOC[1] + offY));
+            BitmapShader sh = new BitmapShader(bd, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            sh.setFilterMode(BitmapShader.FILTER_MODE_LINEAR);
+            sh.setLocalMatrix(MAT);
+            BACK.setShader(sh);
+            c.drawRect(RF, BACK);
+            BACK.setShader(null);
             FILL.setShader(null);
             FILL.setColor(U.alpha(dark ? 0xFF000000 : 0xFFFFFFFF, tint));
             c.drawRect(RF, FILL);

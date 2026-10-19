@@ -1,6 +1,10 @@
 package com.senzaproject.splauncher;
 
 import android.app.Activity;
+import android.appwidget.AppWidgetHost;
+import android.appwidget.AppWidgetHostView;
+import android.appwidget.AppWidgetManager;
+import android.appwidget.AppWidgetProviderInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.LauncherApps;
@@ -11,15 +15,20 @@ import android.graphics.Canvas;
 import android.graphics.Insets;
 import android.graphics.RectF;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.AlarmClock;
 import android.provider.Settings;
 import android.text.InputType;
+import android.util.SizeF;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
+import android.graphics.Outline;
+import android.view.ViewOutlineProvider;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -37,12 +46,14 @@ import android.graphics.Typeface;
 import android.os.UserHandle;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Layar Home SP Launcher. */
-public class LauncherActivity extends Activity implements Workspace.Listener, LibraryView.Host, SearchOverlay.Host {
+public class LauncherActivity extends Activity implements Workspace.Listener, LibraryView.Host, SearchOverlay.Host,
+        WidgetCell.Host, WidgetPicker.Host, NotificationService.Listener {
 
     static final class WallView extends View {
         Bitmap bmp;
@@ -63,8 +74,10 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     PageDots dots;
     GlassLayout dockPanel;
     CellLayout dockLayout;
-    GlassLayout doneBtn;
+    GlassLayout doneBtn, addBtn;
     DragController drag;
+    AppWidgetHost widgetHost;
+    AppWidgetManager awm;
 
     int insTop, insBottom, insLeft, insRight, imeBottom;
     int cols = 4, rows = 6, cellW, cellH, iconSize, dockCap = 4, pageCap = 24, dockH, dockBottom;
@@ -88,6 +101,14 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     private LauncherApps.Callback pkgCallback;
     private int seenLayoutRev;
 
+    static final int HOST_ID = 0x5350;
+    private static final int REQ_BIND = 4101, REQ_CONFIGURE = 4102;
+    private final HashMap<Integer, AppWidgetHostView> hostViews = new HashMap<>();
+    private WidgetPicker picker;
+    private TopSheet sheet, pullSheet;
+    private int pendingId = -1;
+    private AppWidgetProviderInfo pendingInfo;
+
     // ------------------------------------------------------------------ siklus hidup
 
     @Override protected void onCreate(Bundle b) {
@@ -96,6 +117,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         repo = new AppRepo(this);
         store = new LayoutStore(this);
         seenLayoutRev = prefs.layoutRev();
+        awm = AppWidgetManager.getInstance(this);
+        widgetHost = new AppWidgetHost(this, HOST_ID);
         getWindow().setDecorFitsSystemWindows(false);
 
         root = new FrameLayout(this);
@@ -125,6 +148,19 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         doneBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { exitEdit(); } });
         doneBtn.setVisibility(View.GONE);
         root.addView(doneBtn, new FrameLayout.LayoutParams(-2, U.dp(this, 34), Gravity.TOP | Gravity.END));
+        addBtn = new GlassLayout(this, 17, 0.40f, true);
+        addBtn.setGravity(Gravity.CENTER);
+        TextView plus = new TextView(this);
+        plus.setText("+");
+        plus.setTextColor(0xFFFFFFFF);
+        plus.setTextSize(24f);
+        plus.setGravity(Gravity.CENTER);
+        plus.setIncludeFontPadding(false);
+        addBtn.addView(plus, new LinearLayout.LayoutParams(-1, -1));
+        addBtn.setContentDescription("Tambah widget");
+        addBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { openWidgetPicker(); } });
+        addBtn.setVisibility(View.GONE);
+        root.addView(addBtn, new FrameLayout.LayoutParams(U.dp(this, 34), U.dp(this, 34), Gravity.TOP | Gravity.START));
         dragLayer = new FrameLayout(this);
         dragLayer.setClipChildren(false);
         root.addView(dragLayer, new FrameLayout.LayoutParams(-1, -1));
@@ -164,15 +200,37 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         repo.reload();
     }
 
+    @Override protected void onStart() {
+        super.onStart();
+        try { widgetHost.startListening(); } catch (Throwable ignored) { }
+        NotificationService.addListener(this);
+        NotificationService.ensureBound(this);
+    }
+
+    @Override protected void onStop() {
+        super.onStop();
+        try { widgetHost.stopListening(); } catch (Throwable ignored) { }
+        NotificationService.removeListener(this);
+    }
+
     @Override protected void onDestroy() {
         super.onDestroy();
+        hostViews.clear();
         try { repo.la.unregisterCallback(pkgCallback); } catch (Throwable ignored) { }
         exec.shutdownNow();
     }
 
     @Override protected void onResume() {
         super.onResume();
-        if (prefs.layoutRev() != seenLayoutRev) { seenLayoutRev = prefs.layoutRev(); store.reset(); }
+        if (prefs.layoutRev() != seenLayoutRev) {
+            seenLayoutRev = prefs.layoutRev();
+            for (LayoutStore.Item w : store.externalWidgets()) {
+                try { widgetHost.deleteAppWidgetId(w.wid); } catch (Throwable ignored) { }
+            }
+            hostViews.clear();
+            store.reset();
+        }
+        refreshBadges();
         String sig = prefs.signature(this);
         if (!sig.equals(lastSig)) scheduleRebuild();
     }
@@ -188,13 +246,17 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             dismissMenu();
             closePanel(false);
             closeSearch();
+            if (picker != null) picker.dismiss(false);
+            if (sheet != null) removeSheet(sheet);
             if (edit) exitEdit();
             if (workspace.page() != 0) workspace.smoothTo(0);
         }
     }
 
     @Override public void onBackPressed() {
-        if (menuScrim != null) dismissMenu();
+        if (picker != null) picker.dismiss(true);
+        else if (sheet != null) sheet.close();
+        else if (menuScrim != null) dismissMenu();
         else if (panelDim != null) closePanel(true);
         else if (search != null) closeSearch();
         else if (edit) exitEdit();
@@ -277,7 +339,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         lastSig = prefs.signature(this);
         computeMetrics(w, h);
         loadWallpaperIfNeeded(w, h);
-        store.ensure(this, repo, prefs, pageCap, dockCap);
+        store.ensure(this, repo, prefs, cols, rows, dockCap);
 
         int keep = workspace.page();
         dismissMenu();
@@ -312,15 +374,21 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         dn.rightMargin = insRight + U.dp(this, 16);
         doneBtn.setLayoutParams(dn);
         doneBtn.setGlass(17, 0.40f, true);
+        FrameLayout.LayoutParams an = (FrameLayout.LayoutParams) addBtn.getLayoutParams();
+        an.topMargin = insTop + U.dp(this, 8);
+        an.leftMargin = insLeft + U.dp(this, 16);
+        addBtn.setLayoutParams(an);
+        addBtn.setGlass(17, 0.40f, true);
 
         onScrollFraction(workspace.getScrollX() / (float) Math.max(1, w));
         if (edit) applyEdit(true);
+        refreshBadges();
     }
 
     private CellLayout newPage(List<LayoutStore.Item> items, boolean unused) {
         CellLayout cl = new CellLayout(this);
         cl.configure(cols, rows, cellW, cellH, padL(), padT());
-        for (LayoutStore.Item it : items) cl.addView(newIcon(it, false));
+        for (LayoutStore.Item it : items) cl.addView(it.type == LayoutStore.WIDGET ? newWidget(it) : newIcon(it, false));
         return cl;
     }
 
@@ -400,7 +468,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     CellLayout pageLayout(int i) { return (CellLayout) workspace.getChildAt(i); }
 
     /** -1 = dock, -2 = bukan di Home, selain itu indeks halaman. */
-    int pageIndexOf(IconView v) {
+    int pageIndexOf(View v) {
         if (v.getParent() == dockLayout) return -1;
         int i = workspace.indexOfChild((View) v.getParent());
         return (i >= 0 && i < store.pages.size()) ? i : -2;
@@ -427,13 +495,14 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (!edit) return;
         edit = false;
         applyEdit(false);
-        store.normalize(pageCap, dockCap);
+        store.normalize(cols, rows, dockCap);
         store.save();
         rebuildAll();
     }
 
     private void applyEdit(boolean on) {
-        doneBtn.setVisibility(on ? View.VISIBLE : View.GONE);
+        doneBtn.setVisibility(on && picker == null ? View.VISIBLE : View.GONE);
+        addBtn.setVisibility(on && picker == null ? View.VISIBLE : View.GONE);
         workspace.setPullEnabled(!on);
         workspace.setLongPressEnabled(!on);
         for (int i = 0; i < workspace.getChildCount(); i++) {
@@ -444,7 +513,11 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     }
 
     private void setEditOn(CellLayout cl, boolean on) {
-        for (int i = 0; i < cl.getChildCount(); i++) ((IconView) cl.getChildAt(i)).setEdit(on);
+        for (int i = 0; i < cl.getChildCount(); i++) {
+            View v = cl.getChildAt(i);
+            if (v instanceof IconView) ((IconView) v).setEdit(on);
+            else if (v instanceof WidgetCell) ((WidgetCell) v).setEdit(on);
+        }
     }
 
     // ------------------------------------------------------------------ ikon
@@ -518,7 +591,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             }));
         } else if (!store.isOnHome(a.key)) {
             acts.add(new Menus.Action("Tambahkan ke Home Screen", new Runnable() {
-                @Override public void run() { store.addToHome(a.key); store.normalize(pageCap, dockCap); store.save(); rebuildAll(); toast("Ditambahkan ke Home Screen"); }
+                @Override public void run() { store.addToHome(a.key); store.normalize(cols, rows, dockCap); store.save(); rebuildAll(); toast("Ditambahkan ke Home Screen"); }
             }));
         }
         acts.add(new Menus.Action("Info Aplikasi", new Runnable() {
@@ -795,14 +868,394 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
 
     @Override public void onPageSettled(int page) { }
 
-    @Override public void onPullDown(float x, float y) { openSearch(); }
+    @Override public void onPullBegin(float x, float y) {
+        pullSheet = null;
+        if (sheet != null || !prefs.topGestures()) return;
+        if (y < insTop + U.dp(this, 120)) {
+            pullSheet = makeSheet(x > root.getWidth() * 0.55f ? 2 : 1);
+            pullSheet.setProgress(0f);
+        }
+    }
+
+    @Override public void onPullMove(float dy) {
+        if (pullSheet != null) pullSheet.setProgress(dy / (root.getHeight() * 0.40f));
+    }
+
+    @Override public void onPullEnd(float dy, float vy, boolean cancelled) {
+        TopSheet s = pullSheet;
+        pullSheet = null;
+        if (s != null) {
+            boolean open = !cancelled && (s.progress() > 0.30f || vy > 1000f);
+            s.animateTo(open ? 1f : 0f, vy);
+            return;
+        }
+        if (!cancelled && (dy > U.dpf(this, 70) || vy > 1200f)) openSearch();
+    }
 
     @Override public void onEmptyLongPress(float x, float y) {
         List<Menus.Action> acts = new ArrayList<>();
         acts.add(new Menus.Action("Edit Layar Utama", new Runnable() { @Override public void run() { enterEdit(); } }));
+        acts.add(new Menus.Action("Tambah Widget", new Runnable() { @Override public void run() { openWidgetPicker(); } }));
         acts.add(new Menus.Action("Wallpaper & Tampilan", new Runnable() { @Override public void run() { openSettings(); } }));
         acts.add(new Menus.Action("Pengaturan SP Launcher", new Runnable() { @Override public void run() { openSettings(); } }));
         showMenu(new RectF(x, y, x, y), acts);
+    }
+
+    // ------------------------------------------------------------------ widget
+
+    int widgetInsetX() { return Math.max(U.dp(this, 6), (cellW - iconSize) / 2); }
+
+    int widgetInsetY() {
+        int block = iconSize + (prefs.labels() ? U.dp(this, 5) + Math.round(U.sp(this, 11) * 1.3f) : 0);
+        return U.clamp((cellH - block) / 2, U.dp(this, 5), U.dp(this, 18));
+    }
+
+    ExtWidgets.Metrics metrics() {
+        ExtWidgets.Metrics m = new ExtWidgets.Metrics();
+        m.cols = cols; m.rows = rows; m.cellW = cellW; m.cellH = cellH;
+        m.insetX = widgetInsetX(); m.insetY = widgetInsetY();
+        return m;
+    }
+
+    private WidgetCell newWidget(LayoutStore.Item it) {
+        View content = it.isExternal() ? externalView(it) : BuiltinWidgets.create(this, it, prefs, dark);
+        return new WidgetCell(this, it, content, this, widgetInsetX(), widgetInsetY());
+    }
+
+    private View externalView(LayoutStore.Item it) {
+        AppWidgetProviderInfo info = null;
+        try { info = awm.getAppWidgetInfo(it.wid); } catch (Throwable ignored) { }
+        if (info == null) {
+            // penyedia widget tidak ada (aplikasi dihapus / sedang diperbarui): jangan hapus otomatis
+            return new BuiltinWidgets.Missing(this, prefs, dark, it.spanW, it.spanH, "Widget tidak tersedia",
+                    "Aplikasi widget ini dihapus atau sedang diperbarui. Tahan untuk menghapus.");
+        }
+        AppWidgetHostView hv = hostViews.get(it.wid);
+        if (hv == null) {
+            hv = widgetHost.createView(this, it.wid, info);
+            hostViews.put(it.wid, hv);
+        } else if (hv.getParent() instanceof ViewGroup) {
+            ((ViewGroup) hv.getParent()).removeView(hv);
+        }
+        hv.setPadding(0, 0, 0, 0);
+        final float rad = U.dpf(this, 20);
+        hv.setOutlineProvider(new ViewOutlineProvider() {
+            @Override public void getOutline(View v, Outline o) { o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), rad); }
+        });
+        hv.setClipToOutline(true);
+        ExtWidgets.Metrics m = metrics();
+        float d = getResources().getDisplayMetrics().density;
+        ArrayList<SizeF> sizes = new ArrayList<>();
+        sizes.add(new SizeF(m.widthPx(it.spanW) / d, m.heightPx(it.spanH) / d));
+        try { hv.updateAppWidgetSize(new Bundle(), sizes); } catch (Throwable ignored) { }
+        return hv;
+    }
+
+    @Override public void onWidgetClick(WidgetCell c) {
+        if (edit) {
+            if (c.badgeHit(c.lastDownX, c.lastDownY)) confirmRemoveWidget(c); else showWidgetMenu(c, false);
+            return;
+        }
+        if (!c.item.isExternal()) openBuiltin(c.item.wkind);
+    }
+
+    @Override public void onWidgetLongClick(WidgetCell c) {
+        if (edit) { drag.arm(c, true); return; }
+        showWidgetMenu(c, true);
+    }
+
+    @Override public boolean isEditMode() { return edit; }
+
+    @Override public boolean reduceMotion() { return prefs.reduceMotion(); }
+
+    private void openBuiltin(String kind) {
+        try {
+            switch (kind) {
+                case BuiltinWidgets.CLOCK_ANALOG:
+                case BuiltinWidgets.CLOCK_DIGITAL:
+                    startActivity(new Intent(AlarmClock.ACTION_SHOW_ALARMS));
+                    break;
+                case BuiltinWidgets.DATE:
+                case BuiltinWidgets.MONTH:
+                    startActivity(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR));
+                    break;
+                case BuiltinWidgets.BATTERY:
+                    startActivity(new Intent(Intent.ACTION_POWER_USAGE_SUMMARY));
+                    break;
+                case BuiltinWidgets.SEARCH:
+                    openSearch();
+                    break;
+                default:
+                    break;
+            }
+        } catch (Throwable t) {
+            toast("Aplikasi tidak tersedia");
+        }
+    }
+
+    private List<int[]> sizeOptionsFor(LayoutStore.Item it) {
+        ArrayList<int[]> out = new ArrayList<>();
+        if (it.isExternal()) {
+            AppWidgetProviderInfo info = null;
+            try { info = awm.getAppWidgetInfo(it.wid); } catch (Throwable ignored) { }
+            if (info != null) out.addAll(ExtWidgets.sizeOptions(info, metrics(), it.spanW, it.spanH));
+            return out;
+        }
+        for (BuiltinWidgets.Spec sp : BuiltinWidgets.specsFor(it.wkind)) {
+            int w = sp.widthFor(cols), h = sp.heightFor(rows);
+            boolean dup = false;
+            for (int[] o : out) if (o[0] == w && o[1] == h) dup = true;
+            if (!dup) out.add(new int[]{w, h});
+        }
+        return out;
+    }
+
+    private void showWidgetMenu(final WidgetCell c, boolean arm) {
+        haptic(c);
+        List<Menus.Action> acts = new ArrayList<>();
+        final LayoutStore.Item it = c.item;
+        if (!edit) acts.add(new Menus.Action("Edit Layar Utama", new Runnable() { @Override public void run() { enterEdit(); } }));
+        List<int[]> sizes = sizeOptionsFor(it);
+        if (sizes.size() > 1) {
+            for (final int[] sz : sizes) {
+                boolean cur = sz[0] == it.spanW && sz[1] == it.spanH;
+                acts.add(new Menus.Action((cur ? "\u2713  " : "") + "Ukuran " + BuiltinWidgets.sizeLabel(sz[0], sz[1]),
+                        cur ? null : new Runnable() {
+                            @Override public void run() {
+                                store.resizeWidget(it, sz[0], sz[1]);
+                                store.normalize(cols, rows, dockCap);
+                                store.save();
+                                rebuildAll();
+                            }
+                        }));
+            }
+        }
+        acts.add(new Menus.Action("Hapus Widget", new Runnable() { @Override public void run() { removeHomeItem(it); } }, true));
+        showMenu(rectOf(c), acts);
+        if (arm) drag.arm(c, false);
+    }
+
+    private void confirmRemoveWidget(WidgetCell c) {
+        List<Menus.Action> acts = new ArrayList<>();
+        final LayoutStore.Item it = c.item;
+        acts.add(new Menus.Action("Hapus Widget", new Runnable() { @Override public void run() { removeHomeItem(it); } }, true));
+        acts.add(new Menus.Action("Batal", null));
+        showMenu(rectOf(c), acts);
+    }
+
+    /** Hapus item dari Home; widget eksternal juga dilepas dari AppWidgetHost. */
+    void removeHomeItem(LayoutStore.Item it) {
+        if (it.isExternal() && it.wid >= 0) {
+            try { widgetHost.deleteAppWidgetId(it.wid); } catch (Throwable ignored) { }
+            hostViews.remove(it.wid);
+        }
+        store.removeItem(it);
+        store.save();
+        rebuildAll();
+    }
+
+    // ---- galeri widget
+
+    void openWidgetPicker() {
+        if (picker != null) return;
+        dismissMenu();
+        closePanel(false);
+        closeSearch();
+        picker = new WidgetPicker(this, this, prefs, dark, metrics(), root.getWidth(), root.getHeight(), insTop,
+                Math.max(insBottom, 0), exec);
+        overlayLayer.addView(picker, new FrameLayout.LayoutParams(-1, -1));
+        doneBtn.setVisibility(View.GONE);
+        addBtn.setVisibility(View.GONE);
+    }
+
+    @Override public void onPickerClosed(WidgetPicker p) {
+        if (picker == p) picker = null;
+        p.release();
+        overlayLayer.removeView(p);
+        if (edit && picker == null) {
+            doneBtn.setVisibility(View.VISIBLE);
+            addBtn.setVisibility(View.VISIBLE);
+        }
+    }
+
+    @Override public void onPickBuiltin(BuiltinWidgets.Spec s) {
+        placeWidget(LayoutStore.Item.widget(s.kind, s.widthFor(cols), s.heightFor(rows)));
+    }
+
+    /** Taruh widget baru di halaman aktif; bila tidak muat, coba halaman lain atau buat halaman baru. */
+    private void placeWidget(LayoutStore.Item w) {
+        int pref = U.clamp(workspace.page(), 0, Math.max(0, store.pages.size() - 1));
+        int pg = store.addWidget(w, pref, cols, rows);
+        store.normalize(cols, rows, dockCap);
+        store.save();
+        rebuildAll();
+        workspace.smoothTo(Math.min(pg, store.pages.size() - 1));
+        toast("Widget ditambahkan");
+    }
+
+    @Override public void onPickExternal(AppWidgetProviderInfo info) {
+        cancelPending();
+        pendingInfo = info;
+        try {
+            pendingId = widgetHost.allocateAppWidgetId();
+        } catch (Throwable t) {
+            pendingInfo = null;
+            toast("Tidak dapat menambahkan widget");
+            return;
+        }
+        boolean ok = false;
+        try { ok = awm.bindAppWidgetIdIfAllowed(pendingId, info.getProfile(), info.provider, null); } catch (Throwable ignored) { }
+        if (ok) {
+            afterBind();
+            return;
+        }
+        Intent i = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
+        i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingId);
+        i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider);
+        i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, info.getProfile());
+        try {
+            startActivityForResult(i, REQ_BIND);
+        } catch (Throwable t) {
+            cancelPending();
+            toast("Izin widget tidak dapat diminta");
+        }
+    }
+
+    private void afterBind() {
+        if (pendingInfo != null && pendingInfo.configure != null) {
+            try {
+                widgetHost.startAppWidgetConfigureActivityForResult(this, pendingId, 0, REQ_CONFIGURE, null);
+                return;
+            } catch (Throwable ignored) { /* lanjut tanpa layar konfigurasi */ }
+        }
+        finishAdd();
+    }
+
+    private void finishAdd() {
+        AppWidgetProviderInfo info = pendingInfo;
+        if (info == null && pendingId >= 0) {
+            try { info = awm.getAppWidgetInfo(pendingId); } catch (Throwable ignored) { }
+        }
+        if (info == null || pendingId < 0) { cancelPending(); return; }
+        int[] span = ExtWidgets.spanFor(info, metrics());
+        LayoutStore.Item w = LayoutStore.Item.external(pendingId, info.provider.flattenToString(), span[0], span[1]);
+        pendingId = -1;
+        pendingInfo = null;
+        placeWidget(w);
+    }
+
+    private void cancelPending() {
+        if (pendingId >= 0) {
+            try { widgetHost.deleteAppWidgetId(pendingId); } catch (Throwable ignored) { }
+        }
+        pendingId = -1;
+        pendingInfo = null;
+    }
+
+    @Override protected void onActivityResult(int req, int res, Intent data) {
+        if (req == REQ_BIND || req == REQ_CONFIGURE) {
+            int id = data == null ? -1 : data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+            if (pendingId < 0 && id >= 0) pendingId = id;
+            if (pendingInfo == null && pendingId >= 0) {
+                try { pendingInfo = awm.getAppWidgetInfo(pendingId); } catch (Throwable ignored) { }
+            }
+            if (res == RESULT_OK) {
+                if (req == REQ_BIND) afterBind(); else finishAdd();
+            } else {
+                cancelPending();
+            }
+            return;
+        }
+        super.onActivityResult(req, res, data);
+    }
+
+    // ------------------------------------------------------------------ Pusat Notifikasi & Control Center
+
+    private final TopSheet.Host sheetHost = new TopSheet.Host() {
+        @Override public void onSheetClosed(TopSheet s) { removeSheet(s); }
+        @Override public boolean reduceMotion() { return prefs.reduceMotion(); }
+    };
+
+    private void removeSheet(TopSheet s) {
+        s.release();
+        overlayLayer.removeView(s);
+        if (sheet == s) sheet = null;
+        if (pullSheet == s) pullSheet = null;
+    }
+
+    /** mode 1 = Pusat Notifikasi, 2 = Control Center. Lembar dibuat tertutup (progress 0). */
+    private TopSheet makeSheet(int mode) {
+        dismissMenu();
+        TopSheet s;
+        if (mode == 1) {
+            s = new NotificationCenter(this, sheetHost, new NotificationCenter.Actions() {
+                @Override public void openSettingsForAccess() {
+                    try { startActivity(NotificationCenter.accessSettingsIntent()); }
+                    catch (Throwable t) { toast("Tidak dapat membuka pengaturan"); }
+                }
+                @Override public AppRepo.AppInfo appFor(String pkg) { return repo.findByPackage(pkg); }
+                @Override public Prefs prefs() { return prefs; }
+                @Override public boolean dark() { return dark; }
+            }, insTop, insBottom);
+        } else {
+            s = new ControlCenter(this, sheetHost, new ControlCenter.Actions() {
+                @Override public boolean launch(Intent i) {
+                    try { startActivity(i); return true; }
+                    catch (Throwable t) { toast("Tidak dapat membuka pengaturan"); return false; }
+                }
+                @Override public void toast(String m) { LauncherActivity.this.toast(m); }
+                @Override public void requestWriteSettings() {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:" + getPackageName())));
+                    } catch (Throwable t) { toast("Tidak dapat membuka pengaturan"); }
+                }
+            }, root.getWidth(), insTop, insBottom);
+        }
+        overlayLayer.addView(s, new FrameLayout.LayoutParams(-1, -1));
+        sheet = s;
+        return s;
+    }
+
+    void openSheet(int mode) {
+        if (sheet != null || picker != null) return;
+        closePanel(false);
+        closeSearch();
+        makeSheet(mode).open();
+    }
+
+    // ------------------------------------------------------------------ badge notifikasi
+
+    @Override public void onNotificationsChanged() { refreshBadges(); }
+
+    void refreshBadges() {
+        if (workspace == null || repo == null) return;
+        HashMap<String, Integer> counts = prefs.notifBadges() ? NotificationService.counts(getPackageName())
+                : new HashMap<String, Integer>();
+        applyBadges(dockLayout, counts);
+        for (int i = 0; i < workspace.getChildCount(); i++) {
+            View p = workspace.getChildAt(i);
+            if (p instanceof CellLayout) applyBadges((CellLayout) p, counts);
+        }
+    }
+
+    private void applyBadges(CellLayout cl, HashMap<String, Integer> counts) {
+        for (int i = 0; i < cl.getChildCount(); i++) {
+            View v = cl.getChildAt(i);
+            if (!(v instanceof IconView)) continue;
+            IconView iv = (IconView) v;
+            int n = 0;
+            if (iv.item != null && iv.item.type == LayoutStore.APP && iv.app != null) {
+                Integer c = counts.get(iv.app.pkg);
+                n = c == null ? 0 : c;
+            } else if (iv.item != null && iv.item.type == LayoutStore.FOLDER) {
+                for (String k : iv.item.kids) {
+                    AppRepo.AppInfo a = repo.get(k);
+                    Integer c = a == null ? null : counts.get(a.pkg);
+                    if (c != null) n += c;
+                }
+            }
+            iv.setBadge(n);
+        }
     }
 
     private void openSettings() { startActivity(new Intent(this, SettingsActivity.class)); }
