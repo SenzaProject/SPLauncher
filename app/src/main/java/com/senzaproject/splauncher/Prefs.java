@@ -34,6 +34,8 @@ final class Prefs {
     int schedStart() { return U.clamp(sp.getInt("schedStart", 19 * 60), 0, 1439); } // menit sejak 00:00, mulai gelap
     int schedEnd() { return U.clamp(sp.getInt("schedEnd", 6 * 60), 0, 1439); }      // menit sejak 00:00, selesai gelap
     boolean transparentFolders() { return sp.getBoolean("transparentFolders", true); }
+    /** Layar Nol: halaman widget di kiri Home pertama (geser ke kanan dari Home pertama). */
+    boolean zeroScreen() { return sp.getBoolean("zeroScreen", true); }
     /** Nama tingkat Ukuran Ikon terdekat dengan nilai iconScale sekarang. */
     int iconStep() {
         int best = 0;
@@ -115,6 +117,6 @@ final class Prefs {
                 + "|" + iconPack() + "|" + notifBadges()
                 + "|" + iconShape() + "|" + labelSize() + "|" + rowsPref() + "|" + dockRadius() + "|" + dockOpacity()
                 + "|" + pageDots() + "|" + hideStatusBar() + "|" + wallDim()
-                + "|" + transition() + "|" + drawerMode() + "|" + widgetPlace() + "|" + transparentFolders();
+                + "|" + transition() + "|" + drawerMode() + "|" + widgetPlace() + "|" + transparentFolders() + "|" + zeroScreen();
     }
 }

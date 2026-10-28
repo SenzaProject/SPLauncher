@@ -126,11 +126,15 @@ final class CellLayout extends ViewGroup {
     }
 
     /** Indeks anak ikon (selain exclude) yang pusat tampilnya dekat titik lokal; selain itu -1. */
-    int hitZone(float lx, float ly, int exclude) {
+    int hitZone(float lx, float ly, int exclude) { return hitZone(lx, ly, exclude, false); }
+
+    /** foldersOnly = true: hanya folder yang dianggap target (saat menyeret folder untuk digabung). */
+    int hitZone(float lx, float ly, int exclude, boolean foldersOnly) {
         for (int k = 0; k < getChildCount(); k++) {
             if (k == exclude) continue;
             View v = getChildAt(k);
             if (!(v instanceof IconView)) continue;
+            if (foldersOnly && !((IconView) v).isFolder()) continue;
             int slot = pvSlots != null && k < pvSlots.length ? pvSlots[k] : slotOfChild(k);
             if (slot < 0) continue;
             float cx = slotX(slot) + cellW / 2f, cy = slotY(slot) + cellH / 2f;

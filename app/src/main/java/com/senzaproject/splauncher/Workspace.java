@@ -22,9 +22,15 @@ final class Workspace extends ViewGroup {
         void onEmptyLongPress(float x, float y);
         /** Ketuk dua kali di area kosong Home. */
         void onEmptyDoubleTap();
+        /** Geser ke kanan dari Home pertama dimulai: buka Layar Nol. */
+        void onZeroBegin();
+        /** dx = jarak geser ke kanan dari titik awal (piksel). */
+        void onZeroMove(float dx);
+        /** Jari dilepas; vx = kecepatan horizontal (px/detik), cancelled bila sentuhan dibatalkan. */
+        void onZeroEnd(float dx, float vx, boolean cancelled);
     }
 
-    private static final int IDLE = 0, SCROLLING = 1, PULLING = 2;
+    private static final int IDLE = 0, SCROLLING = 1, PULLING = 2, ZEROING = 3;
 
     private final OverScroller scroller;
     private VelocityTracker vt;
@@ -34,6 +40,7 @@ final class Workspace extends ViewGroup {
     private int page = 0;
     private int homeCount = 1;
     private boolean pullEnabled = true;
+    private boolean zeroEnabled = false;
     private boolean longPressEnabled = true;
     private Listener listener;
     private boolean longFired;
@@ -62,6 +69,12 @@ final class Workspace extends ViewGroup {
     void setHomeCount(int n) { homeCount = n; }
     int page() { return page; }
     void setPullEnabled(boolean e) { pullEnabled = e; }
+    void setZeroEnabled(boolean e) { zeroEnabled = e; }
+
+    /** Layar Nol hanya bisa ditarik dari Home pertama yang sedang diam, di luar mode edit. */
+    private boolean zeroOk() {
+        return zeroEnabled && pullEnabled && listener != null && page == 0 && getScrollX() <= 0 && getChildCount() > 0;
+    }
     void setLongPressEnabled(boolean e) { longPressEnabled = e; }
     int pageCount() { return getChildCount(); }
 
@@ -130,6 +143,11 @@ final class Workspace extends ViewGroup {
                 track(e);
                 float dx = e.getX() - downX, dy = e.getY() - downY;
                 if (state == IDLE) {
+                    if (zeroOk() && dx > slop && dx > Math.abs(dy) * 1.2f) {
+                        state = ZEROING; removeCallbacks(longPress);
+                        listener.onZeroBegin();
+                        return true;
+                    }
                     if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy) * 1.2f) {
                         state = SCROLLING; lastX = e.getX(); removeCallbacks(longPress);
                         return true;
@@ -164,13 +182,17 @@ final class Workspace extends ViewGroup {
             case MotionEvent.ACTION_MOVE: {
                 float dx = e.getX() - downX, dy = e.getY() - downY;
                 if (state == IDLE) {
-                    if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy) * 1.2f) {
+                    if (zeroOk() && dx > slop && dx > Math.abs(dy) * 1.2f) {
+                        state = ZEROING; removeCallbacks(longPress);
+                        listener.onZeroBegin();
+                    } else if (Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy) * 1.2f) {
                         state = SCROLLING; lastX = e.getX(); removeCallbacks(longPress);
                     } else if (Math.abs(dy) > slop * 2 || Math.abs(dx) > slop * 2) {
                         removeCallbacks(longPress);
                     }
                 }
                 if (state == PULLING && listener != null) listener.onPullMove(e.getY() - downY);
+                if (state == ZEROING && listener != null) listener.onZeroMove(e.getX() - downX);
                 if (state == SCROLLING) {
                     float d = lastX - e.getX();
                     lastX = e.getX();
@@ -197,6 +219,9 @@ final class Workspace extends ViewGroup {
                 } else if (state == PULLING) {
                     vt.computeCurrentVelocity(1000);
                     if (listener != null) listener.onPullEnd(e.getY() - downY, vt.getYVelocity(), false);
+                } else if (state == ZEROING) {
+                    vt.computeCurrentVelocity(1000);
+                    if (listener != null) listener.onZeroEnd(e.getX() - downX, vt.getXVelocity(), false);
                 } else if (state == IDLE && !longFired && listener != null
                         && Math.abs(e.getX() - downX) < slop * 2 && Math.abs(e.getY() - downY) < slop * 2) {
                     long now = e.getEventTime();
@@ -218,6 +243,7 @@ final class Workspace extends ViewGroup {
                 removeCallbacks(longPress);
                 if (state == SCROLLING) smoothTo(Math.round(getScrollX() / (float) Math.max(1, getWidth())));
                 if (state == PULLING && listener != null) listener.onPullEnd(e.getY() - downY, 0f, true);
+                if (state == ZEROING && listener != null) listener.onZeroEnd(e.getX() - downX, 0f, true);
                 state = IDLE;
                 release();
                 return true;

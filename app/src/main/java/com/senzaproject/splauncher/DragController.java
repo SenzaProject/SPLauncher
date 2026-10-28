@@ -207,7 +207,9 @@ final class DragController {
         float[] lp = a.toLocal(curLayout, cx, cy);
         int srcChild = same ? curLayout.indexOfChild(src) : -1;
 
-        int zone = item.type == LayoutStore.APP ? curLayout.hitZone(lp[0], lp[1], srcChild) : -1;
+        // Aplikasi bisa digabung ke aplikasi/folder; folder hanya bisa digabung ke folder lain.
+        boolean mergeable = item.type == LayoutStore.APP || item.type == LayoutStore.FOLDER;
+        int zone = mergeable ? curLayout.hitZone(lp[0], lp[1], srcChild, item.type == LayoutStore.FOLDER) : -1;
         if (zone >= 0) {
             if (zone != hoverIdx) {
                 resetHover();
@@ -230,12 +232,19 @@ final class DragController {
         if (curLayout == null || curWhere == NONE) { revert(); return; }
         final ArrayList<LayoutStore.Item> dest = curWhere == DOCK ? a.store.dock : a.store.pages.get(curWhere);
         float tx, ty, ts = 1f, ta = 0.94f;
-        if (mergeTarget != null && mergeView != null && mergeView.getParent() == curLayout && item.type == LayoutStore.APP) {
+        boolean mergeOk = mergeTarget != null && mergeView != null && mergeView.getParent() == curLayout
+                && (item.type == LayoutStore.APP
+                    || (item.type == LayoutStore.FOLDER && mergeTarget.type == LayoutStore.FOLDER && mergeTarget != item));
+        if (mergeOk) {
             int[] ml = new int[2];
             mergeView.getLocationInWindow(ml);
             tx = ml[0]; ty = ml[1]; ts = 0.35f; ta = 0f;
             srcList.remove(item);
-            if (mergeTarget.type == LayoutStore.APP) {
+            if (item.type == LayoutStore.FOLDER) {
+                // gabung folder: isi folder yang diseret pindah ke folder tujuan, folder asal dihapus
+                for (String k : item.kids) if (!mergeTarget.kids.contains(k)) mergeTarget.kids.add(k);
+                if ("Folder".equals(mergeTarget.title) && !"Folder".equals(item.title)) mergeTarget.title = item.title;
+            } else if (mergeTarget.type == LayoutStore.APP) {
                 LayoutStore.Item f = LayoutStore.Item.folder("Folder");
                 f.kids.add(mergeTarget.key);
                 f.kids.add(item.key);

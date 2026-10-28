@@ -116,6 +116,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     private final HashMap<Integer, AppWidgetHostView> hostViews = new HashMap<>();
     private WidgetPicker picker;
     private TopSheet sheet, pullSheet;
+    /** Layar Nol (panel widget di kiri Home pertama); null bila tertutup. */
+    private ZeroScreen zero;
     AppSwitcher switcher;
     private final Runnable switcherRun = new Runnable() { @Override public void run() { openSwitcher(); } };
     private float dsX, dsY;
@@ -267,6 +269,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             dismissMenu();
             closePanel(false);
             closeSearch();
+            removeZero();
             if (picker != null) picker.dismiss(false);
             if (sheet != null) removeSheet(sheet);
             if (edit) exitEdit();
@@ -280,6 +283,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (switcher != null) closeSwitcher(true);
         else if (picker != null) picker.dismiss(true);
         else if (sheet != null) sheet.close();
+        else if (zero != null) zero.close();
         else if (menuScrim != null) dismissMenu();
         else if (panelDim != null) closePanel(true);
         else if (search != null) closeSearch();
@@ -378,6 +382,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         library.rebuild(repo.all(), prefs, dark, insTop, insBottom, w, this);
         workspace.addView(library);
         workspace.setHomeCount(store.pages.size());
+        workspace.setZeroEnabled(prefs.zeroScreen());
+        if (zero != null) removeZero();
         workspace.setPage(Math.min(keep, workspace.getChildCount() - 1));
 
         // dock
@@ -963,6 +969,41 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (prefs.pullSearch() && !cancelled && (dy > U.dpf(this, 70) || vy > 1200f)) openSearch();
     }
 
+    // ------------------------------------------------------------------ Layar Nol
+
+    private final ZeroScreen.Host zeroHost = new ZeroScreen.Host() {
+        @Override public void onZeroClosed(ZeroScreen z) { if (zero == z) removeZero(); else { z.release(); overlayLayer.removeView(z); } }
+        @Override public boolean reduceMotion() { return prefs.reduceMotion(); }
+        @Override public void onZeroSearch() { removeZero(); openSearch(); }
+    };
+
+    private void removeZero() {
+        ZeroScreen z = zero;
+        zero = null;
+        if (z == null) return;
+        z.release();
+        overlayLayer.removeView(z);
+    }
+
+    @Override public void onZeroBegin() {
+        if (zero != null) removeZero();
+        dismissMenu();
+        zero = new ZeroScreen(this, prefs, dark, insTop, insBottom, zeroHost);
+        overlayLayer.addView(zero, new FrameLayout.LayoutParams(-1, -1));
+        zero.setProgress(0f);
+    }
+
+    @Override public void onZeroMove(float dx) {
+        if (zero != null) zero.setProgress(dx / Math.max(1f, root.getWidth() * 0.9f));
+    }
+
+    @Override public void onZeroEnd(float dx, float vx, boolean cancelled) {
+        ZeroScreen z = zero;
+        if (z == null) return;
+        boolean open = !cancelled && (z.progress() > 0.30f || vx > 900f);
+        z.animateTo(open ? 1f : 0f);
+    }
+
     @Override public void onEmptyLongPress(float x, float y) {
         List<Menus.Action> acts = new ArrayList<>();
         if (!prefs.lockLayout()) acts.add(new Menus.Action("Edit Layar Utama", new Runnable() { @Override public void run() { enterEdit(); } }));
@@ -1369,7 +1410,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
 
     /** Geser ke atas di area Home (di atas Dock) membuka Laci Aplikasi bila diaktifkan di Pengaturan. */
     private void trackDrawerSwipe(MotionEvent ev) {
-        if (prefs.drawerMode() != 0 || edit || switcher != null || search != null || picker != null || sheet != null
+        if (prefs.drawerMode() != 0 || edit || switcher != null || search != null || picker != null || sheet != null || zero != null
                 || menuScrim != null || panelDim != null || workspace.page() >= store.pages.size()) {
             duOn = false;
             return;
@@ -1404,7 +1445,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     }
 
     private void trackDockSwipe(MotionEvent ev) {
-        if (!prefs.dockSwipeSwitcher() || edit || switcher != null) { dsOn = false; return; }
+        if (!prefs.dockSwipeSwitcher() || edit || switcher != null || zero != null) { dsOn = false; return; }
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
                 float[] p = toRoot(ev.getRawX(), ev.getRawY());

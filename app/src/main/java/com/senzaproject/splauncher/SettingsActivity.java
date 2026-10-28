@@ -637,6 +637,10 @@ public class SettingsActivity extends Activity {
                 + "Setelah terkunci, bangunkan layar dengan fitur ketuk dua kali bawaan perangkat."));
         c8.addView(divider());
         c8.addView(toggle("Tarik ke Bawah untuk Pencarian", "pullSearch", prefs.pullSearch()));
+        c8.addView(divider());
+        c8.addView(toggle("Layar Nol", "zeroScreen", prefs.zeroScreen()));
+        c8.addView(note("Halaman widget (pencarian, jam, tanggal, kalender, baterai) di sebelah kiri Home pertama. "
+                + "Geser ke kanan dari Home pertama untuk membukanya; geser ke kiri atau tekan Kembali untuk menutup."));
         page.addView(c8);
 
         section("TARIK DARI ATAS");
@@ -1383,7 +1387,9 @@ public class SettingsActivity extends Activity {
                 + "\u2022 Control Center: kecerahan, volume, senter, kunci rotasi, Fokus, media, dan pintasan\n"
                 + "\u2022 Pusat Notifikasi dengan kartu geser-untuk-hapus dan badge pada ikon\n"
                 + "\u2022 Paket ikon bergaya iOS 27 (bawaan) dan dukungan paket ikon pihak ketiga\n"
-                + "\u2022 Perbaikan panel folder/kategori yang tampak setengah berwarna\n\n"
+                + "\u2022 Perbaikan panel folder/kategori yang tampak setengah berwarna\n"
+                + "\u2022 Gabung folder: seret satu folder ke folder lain, isinya menyatu\n"
+                + "\u2022 Layar Nol: halaman widget di kiri Home pertama (geser ke kanan dari Home pertama)\n\n"
                 + "Segera hadir: backup & restore susunan Home.", 13.5f, sub, false);
         notes.setPadding(dp(16), dp(12), dp(16), dp(12));
         c.addView(notes);
