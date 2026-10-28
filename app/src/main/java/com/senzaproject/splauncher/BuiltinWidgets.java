@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.TimeZone;
 
 /**
- * Widget bawaan SP Launcher: digambar sendiri (tanpa AppWidgetProvider) dengan latar Liquid Glass.
+ * Widget bawaan SPLauncher: digambar sendiri (tanpa AppWidgetProvider) dengan latar Liquid Glass.
  * Semua teks berbahasa Indonesia; pekan dimulai hari Senin.
  */
 final class BuiltinWidgets {

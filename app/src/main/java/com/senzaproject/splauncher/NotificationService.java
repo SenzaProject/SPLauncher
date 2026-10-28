@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * Pendengar notifikasi: sumber data Pusat Notifikasi, badge ikon, dan kontrol media di Control Center.
- * Pengguna harus mengaktifkan "Akses notifikasi" untuk SP Launcher di Pengaturan Android.
+ * Pengguna harus mengaktifkan "Akses notifikasi" untuk SPLauncher di Pengaturan Android.
  */
 public class NotificationService extends NotificationListenerService {
 

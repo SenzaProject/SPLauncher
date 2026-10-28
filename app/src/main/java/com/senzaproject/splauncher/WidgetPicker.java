@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 
 /**
- * Galeri widget: lembar kaca dari bawah berisi widget bawaan SP Launcher (pratinjau langsung)
+ * Galeri widget: lembar kaca dari bawah berisi widget bawaan SPLauncher (pratinjau langsung)
  * dan widget dari aplikasi lain (AppWidgetProvider), dikelompokkan per aplikasi.
  */
 final class WidgetPicker extends FrameLayout {
@@ -230,7 +230,7 @@ final class WidgetPicker extends FrameLayout {
     // ------------------------------------------------------------------ widget bawaan
 
     private void buildBuiltin(Context c, LinearLayout col) {
-        section(c, col, "SP Launcher");
+        section(c, col, "SPLauncher");
         for (final BuiltinWidgets.Spec s : BuiltinWidgets.CATALOG) {
             LayoutStore.Item it = LayoutStore.Item.widget(s.kind, s.widthFor(m.cols), s.heightFor(m.rows));
             BuiltinWidgets.Base v = BuiltinWidgets.create(c, it, prefs, dark);

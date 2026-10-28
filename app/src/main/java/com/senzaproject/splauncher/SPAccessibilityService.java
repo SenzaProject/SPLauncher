@@ -25,10 +25,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Layanan Aksesibilitas SP Launcher. Dipakai untuk tiga hal, semuanya opsional:
+ * Layanan Aksesibilitas SPLauncher. Dipakai untuk tiga hal, semuanya opsional:
  * 1) mengunci layar (ketuk dua kali di Home),
  * 2) mencatat urutan aplikasi yang sedang dibuka untuk Pengalih Aplikasi iOS 27,
- * 3) mengalihkan layar Recents bawaan sistem ke Pengalih Aplikasi SP Launcher.
+ * 3) mengalihkan layar Recents bawaan sistem ke Pengalih Aplikasi SPLauncher.
  * Layanan ini TIDAK membaca isi layar (canRetrieveWindowContent=false) dan tidak mengirim data keluar.
  */
 public class SPAccessibilityService extends AccessibilityService {
@@ -63,7 +63,7 @@ public class SPAccessibilityService extends AccessibilityService {
     static boolean lockScreen(Context c) {
         SPAccessibilityService s = instance;
         if (s == null) {
-            Toast.makeText(c, "Aktifkan layanan Aksesibilitas \"SP Launcher\" agar ketuk dua kali dapat mengunci layar",
+            Toast.makeText(c, "Aktifkan layanan Aksesibilitas \"SPLauncher\" agar ketuk dua kali dapat mengunci layar",
                     Toast.LENGTH_LONG).show();
             try {
                 c.startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

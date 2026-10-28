@@ -34,6 +34,7 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.OvershootInterpolator;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
@@ -51,7 +52,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Layar Home SP Launcher. */
+/** Layar Home SPLauncher. */
 public class LauncherActivity extends Activity implements Workspace.Listener, LibraryView.Host, SearchOverlay.Host,
         WidgetCell.Host, WidgetPicker.Host, NotificationService.Listener {
 
@@ -100,6 +101,13 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService exec = Executors.newSingleThreadExecutor();
     private final Runnable rebuildRun = new Runnable() { @Override public void run() { rebuildAll(); } };
+    /** Cek tiap menit agar tema Jadwal (gelap/terang) berganti sendiri saat Home sedang terbuka. */
+    private final Runnable themeTick = new Runnable() {
+        @Override public void run() {
+            if (prefs.theme() == Prefs.THEME_SCHEDULE && !prefs.signature(LauncherActivity.this).equals(lastSig)) scheduleRebuild();
+            main.postDelayed(this, 60000);
+        }
+    };
     private LauncherApps.Callback pkgCallback;
     private int seenLayoutRev;
 
@@ -211,6 +219,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         try { widgetHost.startListening(); } catch (Throwable ignored) { }
         NotificationService.addListener(this);
         NotificationService.ensureBound(this);
+        main.removeCallbacks(themeTick);
+        main.postDelayed(themeTick, 60000);
     }
 
     @Override protected void onStop() {
@@ -218,6 +228,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (switcher != null) closeSwitcher(false);
         try { widgetHost.stopListening(); } catch (Throwable ignored) { }
         NotificationService.removeListener(this);
+        main.removeCallbacks(themeTick);
     }
 
     @Override protected void onDestroy() {
@@ -282,7 +293,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         lastRawX = ev.getRawX();
         lastRawY = ev.getRawY();
         if (!bypass && drag != null && drag.active()) return drag.onTouch(ev);
-        if (!bypass) trackDockSwipe(ev);
+        if (!bypass) { trackDockSwipe(ev); trackDrawerSwipe(ev); }
         return super.dispatchTouchEvent(ev);
     }
 
@@ -679,11 +690,11 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         scrim.addView(m, lp);
         overlayLayer.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
         menuScrim = scrim;
-        if (!prefs.reduceMotion()) {
+        if (animOn()) {
             m.setPivotX(anchor.centerX() - left);
             m.setPivotY(above ? mh : 0);
-            m.setScaleX(0.8f); m.setScaleY(0.8f); m.setAlpha(0f);
-            m.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(170).setInterpolator(new DecelerateInterpolator()).start();
+            m.setScaleX(startScale(0.8f)); m.setScaleY(startScale(0.8f)); m.setAlpha(0f);
+            m.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(170).setInterpolator(panelInterp()).start();
         }
     }
 
@@ -719,7 +730,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         dim.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { closePanel(true); } });
 
         int pad = U.dp(this, 16);
-        final GlassLayout box = new GlassLayout(this, 32, dark ? 0.55f : 0.62f, dark);
+        final GlassLayout box = new GlassLayout(this, 32, prefs.transparentFolders() ? (dark ? 0.55f : 0.62f) : 0.92f, dark);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(pad, pad, pad, pad);
         box.setClickable(true);
@@ -800,16 +811,16 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         panelBox = box;
         panelFolder = folder;
 
-        if (!prefs.reduceMotion()) {
+        if (animOn()) {
             final RectF ar = rectOf(anchor);
             dim.setAlpha(0f);
-            box.setScaleX(0.3f); box.setScaleY(0.3f);
+            box.setScaleX(startScale(0.3f)); box.setScaleY(startScale(0.3f));
             box.post(new Runnable() {
                 @Override public void run() {
                     float px = ar.centerX() - box.getLeft(), py = ar.centerY() - box.getTop();
                     box.setPivotX(px); box.setPivotY(py);
                     dim.animate().alpha(1f).setDuration(220).start();
-                    box.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(new DecelerateInterpolator()).start();
+                    box.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(panelInterp()).start();
                 }
             });
         }
@@ -837,7 +848,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         }
         panelDim = null; panelBox = null; panelFolder = null; panelTitle = null;
         dismissMenu();
-        if (animate && !prefs.reduceMotion()) {
+        if (animate && animOn()) {
             dim.animate().alpha(0f).setDuration(160).withEndAction(new Runnable() {
                 @Override public void run() { overlayLayer.removeView(dim); }
             }).start();
@@ -854,11 +865,37 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         dismissMenu();
         search = new SearchOverlay(this, this, prefs, repo, insTop, Math.max(imeBottom, insBottom));
         overlayLayer.addView(search, new FrameLayout.LayoutParams(-1, -1));
-        if (!prefs.reduceMotion()) {
+        if (animOn()) {
             search.setAlpha(0f);
             search.animate().alpha(1f).setDuration(200).start();
         }
         search.post(new Runnable() { @Override public void run() { if (search != null) search.focusInput(); } });
+    }
+
+    /** Laci Aplikasi: daftar semua aplikasi A-Z yang naik dari bawah (geser ke atas di Home). Tanpa memunculkan keyboard. */
+    void openDrawer() {
+        if (search != null) return;
+        dismissMenu();
+        search = new SearchOverlay(this, this, prefs, repo, insTop, Math.max(imeBottom, insBottom));
+        overlayLayer.addView(search, new FrameLayout.LayoutParams(-1, -1));
+        if (animOn()) {
+            search.setAlpha(0f);
+            search.setTranslationY(root.getHeight() * 0.3f);
+            search.animate().alpha(1f).translationY(0f).setDuration(260)
+                    .setInterpolator(new DecelerateInterpolator()).start();
+        }
+    }
+
+    // ------------------------------------------------------------------ animasi transisi
+
+    /** Animasi aktif bila Kurangi Gerakan mati dan Animasi Transisi bukan "Tanpa Animasi". */
+    private boolean animOn() { return !prefs.reduceMotion() && prefs.transition() != Prefs.TR_NONE; }
+
+    /** Skala awal panel/menu: mode Pudar hanya memudar tanpa membesar. */
+    private float startScale(float v) { return prefs.transition() == Prefs.TR_FADE ? 1f : v; }
+
+    private android.animation.TimeInterpolator panelInterp() {
+        return prefs.transition() == Prefs.TR_LIQUID ? new OvershootInterpolator(0.9f) : new DecelerateInterpolator();
     }
 
     @Override public void closeSearch() {
@@ -931,7 +968,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (!prefs.lockLayout()) acts.add(new Menus.Action("Edit Layar Utama", new Runnable() { @Override public void run() { enterEdit(); } }));
         acts.add(new Menus.Action("Tambah Widget", new Runnable() { @Override public void run() { openWidgetPicker(); } }));
         acts.add(new Menus.Action("Wallpaper & Tampilan", new Runnable() { @Override public void run() { openSettings(); } }));
-        acts.add(new Menus.Action("Pengaturan SP Launcher", new Runnable() { @Override public void run() { openSettings(); } }));
+        acts.add(new Menus.Action("Pengaturan SPLauncher", new Runnable() { @Override public void run() { openSettings(); } }));
         showMenu(new RectF(x, y, x, y), acts);
     }
 
@@ -1119,7 +1156,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     /** Taruh widget baru di halaman aktif; bila tidak muat, coba halaman lain atau buat halaman baru. */
     private void placeWidget(LayoutStore.Item w) {
         int pref = U.clamp(workspace.page(), 0, Math.max(0, store.pages.size() - 1));
-        int pg = store.addWidget(w, pref, cols, rows);
+        int pg = store.addWidget(w, pref, cols, rows, prefs.widgetPlace() == 0);
         store.normalize(cols, rows, dockCap);
         store.save();
         rebuildAll();
@@ -1327,6 +1364,45 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     }
 
     /** Geser ke atas dari dock membuka Pengalih Aplikasi. */
+    private float duX, duY;
+    private boolean duOn;
+
+    /** Geser ke atas di area Home (di atas Dock) membuka Laci Aplikasi bila diaktifkan di Pengaturan. */
+    private void trackDrawerSwipe(MotionEvent ev) {
+        if (prefs.drawerMode() != 0 || edit || switcher != null || search != null || picker != null || sheet != null
+                || menuScrim != null || panelDim != null || workspace.page() >= store.pages.size()) {
+            duOn = false;
+            return;
+        }
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN: {
+                float[] p = toRoot(ev.getRawX(), ev.getRawY());
+                float bottom = prefs.showDock() ? dockTop() - U.dp(this, 6) : root.getHeight() - insBottom - U.dp(this, 30);
+                duOn = p[1] > insTop + U.dp(this, 90) && p[1] < bottom;
+                duX = p[0];
+                duY = p[1];
+                break;
+            }
+            case MotionEvent.ACTION_MOVE: {
+                if (!duOn) break;
+                float[] q = toRoot(ev.getRawX(), ev.getRawY());
+                float dy = q[1] - duY, dx = q[0] - duX;
+                if (-dy > U.dp(this, 80) && -dy > Math.abs(dx) * 1.8f) {
+                    duOn = false;
+                    sendCancel();
+                    openDrawer();
+                }
+                break;
+            }
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                duOn = false;
+                break;
+            default:
+                break;
+        }
+    }
+
     private void trackDockSwipe(MotionEvent ev) {
         if (!prefs.dockSwipeSwitcher() || edit || switcher != null) { dsOn = false; return; }
         switch (ev.getActionMasked()) {

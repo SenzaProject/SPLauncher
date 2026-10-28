@@ -6,7 +6,16 @@ import android.content.res.Configuration;
 
 /** Preferensi launcher (disimpan lokal). */
 final class Prefs {
-    static final int THEME_SYSTEM = 0, THEME_LIGHT = 1, THEME_DARK = 2;
+    static final int THEME_SYSTEM = 0, THEME_LIGHT = 1, THEME_DARK = 2, THEME_SCHEDULE = 3;
+    /** Animasi Transisi: Liquid Glass, Zoom, Pudar, Tanpa. */
+    static final int TR_LIQUID = 0, TR_ZOOM = 1, TR_FADE = 2, TR_NONE = 3;
+    static final String[] TRANSITION_NAMES = {"Liquid Glass", "Zoom", "Pudar", "Tanpa Animasi"};
+    /** Laci Aplikasi: 0 = geser ke atas di Home, 1 = hanya halaman App Library. */
+    static final String[] DRAWER_NAMES = {"Geser ke atas", "Halaman App Library"};
+    static final String[] WIDGET_PLACE_NAMES = {"Atas", "Bawah"};
+    /** Ukuran Ikon: 5 tingkat (nilai iconScale %). */
+    static final int[] ICON_STEPS = {78, 90, 100, 115, 130};
+    static final String[] ICON_STEP_NAMES = {"Sangat Kecil", "Kecil", "Normal", "Besar", "Sangat Besar"};
     static final int STYLE_NORMAL = 0, STYLE_DARK = 1, STYLE_GLASS = 2, STYLE_TINTED = 3;
     static final int[] TINTS = {0xFF4F8CFF, 0xFFA66BFF, 0xFF34C98E, 0xFFFF6FA5, 0xFFFF9F45, 0xFF9AA0AE};
     static final String[] TINT_NAMES = {"Biru", "Ungu", "Hijau", "Pink", "Oranye", "Abu"};
@@ -19,6 +28,19 @@ final class Prefs {
     int iconStyle() { return sp.getInt("iconStyle", STYLE_NORMAL); }
     int cols() { return U.clamp(sp.getInt("cols", 4), 4, 6); }
     int iconScale() { return U.clamp(sp.getInt("iconScale", 100), 70, 130); }
+    int transition() { return U.clamp(sp.getInt("transition", TR_LIQUID), 0, 3); }
+    int drawerMode() { return U.clamp(sp.getInt("drawerMode", 0), 0, 1); }
+    int widgetPlace() { return U.clamp(sp.getInt("widgetPlace", 0), 0, 1); }   // 0 atas, 1 bawah
+    int schedStart() { return U.clamp(sp.getInt("schedStart", 19 * 60), 0, 1439); } // menit sejak 00:00, mulai gelap
+    int schedEnd() { return U.clamp(sp.getInt("schedEnd", 6 * 60), 0, 1439); }      // menit sejak 00:00, selesai gelap
+    boolean transparentFolders() { return sp.getBoolean("transparentFolders", true); }
+    /** Nama tingkat Ukuran Ikon terdekat dengan nilai iconScale sekarang. */
+    int iconStep() {
+        int best = 0;
+        for (int i = 1; i < ICON_STEPS.length; i++)
+            if (Math.abs(ICON_STEPS[i] - iconScale()) < Math.abs(ICON_STEPS[best] - iconScale())) best = i;
+        return best;
+    }
     boolean labels() { return sp.getBoolean("labels", true); }
     boolean showDock() { return sp.getBoolean("dock", true); }
     int blur() { return U.clamp(sp.getInt("blur", 60), 0, 100); }
@@ -74,6 +96,13 @@ final class Prefs {
         int t = theme();
         if (t == THEME_LIGHT) return false;
         if (t == THEME_DARK) return true;
+        if (t == THEME_SCHEDULE) {
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            int now = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE);
+            int a = schedStart(), b = schedEnd();
+            if (a == b) return false;
+            return a < b ? (now >= a && now < b) : (now >= a || now < b);
+        }
         return (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES;
     }
@@ -85,6 +114,7 @@ final class Prefs {
                 + "|" + wallpaper() + "|" + tintIndex() + "|" + wallpaperRev() + "|" + layoutRev() + "|" + isDark(c)
                 + "|" + iconPack() + "|" + notifBadges()
                 + "|" + iconShape() + "|" + labelSize() + "|" + rowsPref() + "|" + dockRadius() + "|" + dockOpacity()
-                + "|" + pageDots() + "|" + hideStatusBar() + "|" + wallDim();
+                + "|" + pageDots() + "|" + hideStatusBar() + "|" + wallDim()
+                + "|" + transition() + "|" + drawerMode() + "|" + widgetPlace() + "|" + transparentFolders();
     }
 }

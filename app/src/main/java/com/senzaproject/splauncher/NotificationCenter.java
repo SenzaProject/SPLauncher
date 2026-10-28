@@ -191,7 +191,7 @@ final class NotificationCenter extends TopSheet implements NotificationService.L
         t.setPadding(0, U.dp(c, 10), 0, U.dp(c, 4));
         g.addView(t);
         TextView d = new TextView(c);
-        d.setText("Izinkan SP Launcher membaca notifikasi agar tampil di sini, lengkap dengan badge pada ikon aplikasi dan kontrol media di Control Center.");
+        d.setText("Izinkan SPLauncher membaca notifikasi agar tampil di sini, lengkap dengan badge pada ikon aplikasi dan kontrol media di Control Center.");
         d.setTextColor(0xCCFFFFFF);
         d.setTextSize(14f);
         g.addView(d);

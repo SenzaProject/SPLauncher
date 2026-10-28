@@ -44,7 +44,7 @@ import java.util.List;
 /**
  * Control Center gaya iOS. Tarik ke bawah dari tepi atas-kanan Home.
  * Catatan platform: Android 10+ tidak mengizinkan aplikasi biasa mengubah Wi-Fi / Bluetooth / data seluler / mode
- * pesawat secara langsung, jadi ubin tersebut menampilkan status dan membuka panel sistem (kecuali bila SP Launcher
+ * pesawat secara langsung, jadi ubin tersebut menampilkan status dan membuka panel sistem (kecuali bila SPLauncher
  * dipasang sebagai aplikasi sistem, maka percobaan toggle langsung dilakukan lebih dulu).
  * Senter, volume, kecerahan (izin "Ubah setelan sistem"), kunci rotasi, Fokus (izin Jangan Ganggu) dan kontrol media
  * (izin akses notifikasi) bekerja langsung.
@@ -257,7 +257,7 @@ final class ControlCenter extends TopSheet {
                 NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
                 if (nm == null) return;
                 if (!nm.isNotificationPolicyAccessGranted()) {
-                    act.toast("Izinkan akses Jangan Ganggu untuk SP Launcher");
+                    act.toast("Izinkan akses Jangan Ganggu untuk SPLauncher");
                     go(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
                     return;
                 }
@@ -323,7 +323,7 @@ final class ControlCenter extends TopSheet {
     private void askWrite() {
         if (askedWrite) { act.toast("Izin 'Ubah setelan sistem' belum diberikan"); return; }
         askedWrite = true;
-        act.toast("Izinkan 'Ubah setelan sistem' untuk SP Launcher");
+        act.toast("Izinkan 'Ubah setelan sistem' untuk SPLauncher");
         act.requestWriteSettings();
     }
 

@@ -325,16 +325,24 @@ final class LayoutStore {
      * Tempatkan widget: coba halaman pilihan dulu, lalu halaman lain, terakhir buat halaman baru.
      * @return indeks halaman tempat widget ditaruh
      */
-    int addWidget(Item w, int preferred, int cols, int rows) {
+    int addWidget(Item w, int preferred, int cols, int rows) { return addWidget(w, preferred, cols, rows, false); }
+
+    /** Seperti di atas; top = true menaruh widget di bagian atas halaman (setelah widget yang sudah ada di atas). */
+    int addWidget(Item w, int preferred, int cols, int rows, boolean top) {
         if (pages.isEmpty()) pages.add(new ArrayList<Item>());
         int n = pages.size();
         int start = U.clamp(preferred, 0, n - 1);
         for (int k = 0; k < n; k++) {
             int pg = (start + k) % n;
             ArrayList<Item> p = pages.get(pg);
+            int at = p.size();
+            if (top) {
+                at = 0;
+                while (at < p.size() && p.get(at).type == WIDGET) at++;
+            }
             ArrayList<Item> test = new ArrayList<>(p);
-            test.add(w);
-            if (pageFits(test, cols, rows)) { p.add(w); return pg; }
+            test.add(at, w);
+            if (pageFits(test, cols, rows)) { p.add(at, w); return pg; }
         }
         ArrayList<Item> np = new ArrayList<>();
         np.add(w);

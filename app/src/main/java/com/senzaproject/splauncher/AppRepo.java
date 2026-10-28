@@ -97,6 +97,15 @@ final class AppRepo {
                 int[] loc = new int[2];
                 src.getLocationOnScreen(loc);
                 r = new Rect(loc[0], loc[1], loc[0] + src.getWidth(), loc[1] + src.getHeight());
+            }
+            int tr = new Prefs(ctx).transition();
+            if (tr == Prefs.TR_NONE) {
+                opts = ActivityOptions.makeCustomAnimation(ctx, 0, 0).toBundle();
+            } else if (tr == Prefs.TR_ZOOM) {
+                opts = ActivityOptions.makeCustomAnimation(ctx, R.anim.sp_zoom_in, R.anim.sp_hold).toBundle();
+            } else if (tr == Prefs.TR_FADE) {
+                opts = ActivityOptions.makeCustomAnimation(ctx, R.anim.sp_fade_in, R.anim.sp_fade_out).toBundle();
+            } else if (src != null) {
                 opts = ActivityOptions.makeScaleUpAnimation(src, 0, 0, src.getWidth(), src.getHeight()).toBundle();
             }
             la.startMainActivity(a.cn, a.user, r, opts);

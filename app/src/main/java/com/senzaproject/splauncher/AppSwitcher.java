@@ -271,7 +271,7 @@ final class AppSwitcher extends FrameLayout {
         emptyBox.setVisibility(none ? View.VISIBLE : View.GONE);
         if (none) {
             boolean any = SPAccessibilityService.isEnabled(a) || Recents.usageGranted(a);
-            emptyHint.setText(any ? "" : "Aktifkan layanan Aksesibilitas atau Akses Penggunaan di Pengaturan SP Launcher "
+            emptyHint.setText(any ? "" : "Aktifkan layanan Aksesibilitas atau Akses Penggunaan di Pengaturan SPLauncher "
                     + "agar daftar aplikasi terbaru muncul di sini.");
             emptyHint.setVisibility(any ? View.GONE : View.VISIBLE);
         }

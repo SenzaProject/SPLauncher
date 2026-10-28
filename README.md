@@ -1,4 +1,4 @@
-# SP Launcher
+# SPLauncher
 
 Launcher Android bergaya iOS 27 Liquid Glass. Developer: SenzaProject (senzaproject98@gmail.com). Min Android 14 (API 34).
 Dukung developer: https://t.me/senzaproject (tombol "Support me" di Pengaturan > Tentang).
@@ -11,6 +11,18 @@ Dukung developer: https://t.me/senzaproject (tombol "Support me" di Pengaturan >
 Catatan build: D8 lama di bundletool crash tanpa `javac -parameters` (sudah ada di build.sh).
 JANGAN hilangkan `sp-release.p12`; keystore yang sama dibutuhkan agar APK baru bisa menimpa versi lama.
 Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika murni: lihat `tools/tests/README.md`.
+
+## Pembaruan UI (desain baru)
+- **Pengaturan Launcher** mengikuti mockup baru: kartu header SPLauncher, grup *Tampilan Utama / Ikon & Widget / Efek Liquid Glass*,
+  grup *Personalisasi* (Tema, Wallpaper, Animasi Transisi, Tata Letak Ikon, Laci Aplikasi), grup *Fitur Lainnya*
+  (Notifikasi, Gestur, Kunci Layar, Bantuan & Umpan Balik). "Tampilan Utama" membuka panel **Opsi Tampilan Launcher**
+  (Layout Ikon, Ukuran Ikon 5 tingkat, Efek Liquid Glass, Animasi Transisi, Tata Letak Widget, Laci Aplikasi).
+  Semua opsi lama tetap ada (Pengaturan Lanjutan, Gestur, Kunci Layar, dll).
+- **Wallpaper bawaan** diganti 6 gambar Liquid Glass (`res/drawable-nodpi/wp_1..6.jpg`).
+- **Animasi Transisi**: Liquid Glass / Zoom / Pudar / Tanpa Animasi (membuka aplikasi, folder, menu, pencarian).
+- **Laci Aplikasi**: geser ke atas di area Home membuka daftar semua aplikasi A-Z (bisa dimatikan, kembali ke App Library saja).
+- **Tata Letak Widget**: widget baru ditaruh di atas (default) atau bawah halaman.
+- **Tema Jadwal**: mode gelap otomatis pada jam yang diatur. **Folder Transparan** dapat dimatikan.
 
 ## v1.0.0 (Beta Test)
 - **Versi**: VERSION_NAME `1.0.0 (Beta Test)`, VERSION_CODE 4 (dinaikkan agar bisa menimpa build 3).
@@ -29,6 +41,11 @@ Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika m
   File, Kontak, Kompas, Cuaca, Perekam Suara, Musik) kini memakai sprite PNG dari lembar ikon iOS 27
   (`res/drawable-nodpi/ios_*.png`, 192px). Kalender dan Unduhan tetap digambar glyph (tanggal harus dinamis).
   Catatan: ini gambar bergaya Apple; hati-hati bila APK dipublikasikan luas (potensi klaim hak cipta/merek).
+
+- **UI Pengaturan baru** (mengikuti mockup): halaman utama dengan kolom cari + kartu header + 7 kategori (Personalisasi, Layar & Tampilan,
+  Aplikasi, Gestur, Notifikasi, Keamanan & Privasi, Tentang) yang masing-masing membuka halaman sendiri. Personalisasi memuat kartu Tema,
+  kartu Gaya Ikon (iOS 27 / Klasik / Minimalis), Efek Liquid Glass (toggle + mode + kekuatan), Wallpaper, dan "Atur Layar Beranda"
+  (Widget & Tata Letak: 4x6 / 5x6 / 6x7). Semua opsi lama tetap ada, hanya dipindah ke halaman yang sesuai.
 
 ## v1.2.0
 - **Pengalih Aplikasi iOS 27** (`AppSwitcher`, `Recents`, `SPAccessibilityService`): kartu aplikasi berjajar horizontal di atas wallpaper
@@ -56,7 +73,7 @@ Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika m
 - **Control Center** (`ControlCenter`): tarik ke bawah dari bagian atas Home sisi kanan. Senter, kecerahan (izin "Ubah setelan
   sistem"), volume, kunci rotasi, Fokus (izin Jangan Ganggu), kontrol media, pintasan. Batas Android: aplikasi biasa tidak bisa
   mengubah Wi-Fi/Bluetooth/data seluler/mode pesawat langsung, jadi ubin itu membuka panel sistem (toggle langsung hanya bila
-  SP Launcher dipasang sebagai aplikasi sistem).
+  SPLauncher dipasang sebagai aplikasi sistem).
 - **Paket ikon** (`IconPacks`): gaya iOS 27 bawaan (gambar sendiri, bukan aset Apple), "Ikon asli", dan paket pihak ketiga
   format ADW/Nova (`appfilter.xml`). Pilih di Pengaturan > Tampilan > Paket Ikon.
 - **Ikon aplikasi** baru (rumah + "27"), adaptif + monokrom.
