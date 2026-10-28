@@ -37,9 +37,14 @@ import java.util.WeakHashMap;
 final class Glass {
     private Glass() {}
 
+    static final int MODE_BLUR = 0, MODE_LIQUID = 1, MODE_SOLID = 2;
+
     static Bitmap blurred;
     static int winW = 1, winH = 1;
     static boolean reduce;
+    static int mode = MODE_BLUR;
+    /** Warna rata-rata wallpaper (dipakai mode Kaca Cair sebagai warna dasar panel). */
+    static int avg = 0xFF808080;
 
     private static final Set<View> HOSTS = Collections.newSetFromMap(new WeakHashMap<View, Boolean>());
     private static final Paint BACK = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
@@ -87,21 +92,70 @@ final class Glass {
         out[1] = Math.round(y);
     }
 
-    static void setBackdrop(Bitmap full, int blurPct, boolean reduceTransparency) {
-        reduce = reduceTransparency;
-        winW = full.getWidth();
-        winH = full.getHeight();
-        int sw = Math.max(32, winW / 12);
-        int sh = Math.max(32, Math.round(sw * (winH / (float) winW)));
-        Bitmap small = Bitmap.createScaledBitmap(full, sw, sh, true);
+    /** Hasil persiapan backdrop; dihitung di thread latar, lalu dipasang di thread utama lewat {@link #commit}. */
+    static final class Backdrop {
+        final Bitmap bmp;
+        final int w, h, avg;
+        Backdrop(Bitmap bmp, int w, int h, int avg) { this.bmp = bmp; this.w = w; this.h = h; this.avg = avg; }
+    }
+
+    /** Perkecil bertahap (selalu <= 2x per langkah) agar tidak aliasing, lalu hasilnya siap diburamkan. */
+    private static Bitmap shrink(Bitmap src, int tw, int th) {
+        Bitmap cur = src;
+        while (cur.getWidth() / 2 >= tw && cur.getHeight() / 2 >= th) {
+            Bitmap n = Bitmap.createScaledBitmap(cur, cur.getWidth() / 2, cur.getHeight() / 2, true);
+            if (cur != src && cur != n) cur.recycle();
+            cur = n;
+        }
+        Bitmap n = Bitmap.createScaledBitmap(cur, tw, th, true);
+        if (cur != src && cur != n) cur.recycle();
+        return n;
+    }
+
+    /**
+     * Siapkan backdrop. Aman dipanggil dari thread latar. Intensitas 0% = tanpa blur (hanya diperkecil),
+     * 1..100% = bitmap makin kecil + radius makin besar, sehingga seluruh rentang slider terlihat bedanya.
+     */
+    static Backdrop prepare(Bitmap full, int blurPct) {
+        int w = full.getWidth(), h = full.getHeight();
+        float k = U.clampf(blurPct / 100f, 0f, 1f);
+        int denom = Math.round(3f + k * 11f);                 // 3..14
+        int sw = Math.max(32, w / denom);
+        int sh = Math.max(32, Math.round(sw * (h / (float) w)));
+        Bitmap small = shrink(full, sw, sh);
         int[] px = new int[sw * sh];
         small.getPixels(px, 0, sw, 0, 0, sw, sh);
-        int r = Math.round(1 + blurPct / 100f * 7f);
+        int r = blurPct <= 0 ? 0 : Math.max(1, Math.round(k * 8f));
         Blur.blur(px, sw, sh, r);
+        long sr = 0, sg = 0, sb = 0;
+        for (int i = 0; i < px.length; i++) {
+            int p = px[i];
+            sr += (p >> 16) & 255; sg += (p >> 8) & 255; sb += p & 255;
+        }
+        int n = Math.max(1, px.length);
+        int mean = 0xFF000000 | ((int) (sr / n) << 16) | ((int) (sg / n) << 8) | (int) (sb / n);
         Bitmap out = Bitmap.createBitmap(sw, sh, Bitmap.Config.ARGB_8888);
         out.setPixels(px, 0, sw, 0, 0, sw, sh);
         if (small != full) small.recycle();
-        blurred = out;
+        return new Backdrop(out, w, h, mean);
+    }
+
+    /** Pasang backdrop hasil {@link #prepare}. Panggil dari thread utama. */
+    static void commit(Backdrop b, boolean reduceTransparency, int glassMode) {
+        mode = glassMode;
+        reduce = reduceTransparency || glassMode == MODE_SOLID;
+        winW = b.w;
+        winH = b.h;
+        avg = b.avg;
+        blurred = b.bmp;
+        invalidateAll();
+    }
+
+    /** Ganti mode tanpa menghitung ulang backdrop. Panggil dari thread utama. */
+    static void setMode(boolean reduceTransparency, int glassMode) {
+        if (mode == glassMode && reduce == (reduceTransparency || glassMode == MODE_SOLID)) return;
+        mode = glassMode;
+        reduce = reduceTransparency || glassMode == MODE_SOLID;
         invalidateAll();
     }
 
@@ -126,8 +180,24 @@ final class Glass {
         int save = c.save();
         c.clipPath(PATH);
         Bitmap bd = blurred;
-        boolean solid = reduce || bd == null;
-        if (!solid) {
+        boolean solid = reduce || mode == MODE_SOLID || bd == null;
+        boolean liquid = !solid && mode == MODE_LIQUID;
+        if (liquid) {
+            // Kaca Cair: tanpa sampling backdrop (jauh lebih ringan). Warna dasar dari rata-rata wallpaper,
+            // ditambah kilau diagonal dan sorot atas agar tetap terlihat seperti kaca.
+            int baseC = U.lerpColor(avg, dark ? 0xFF000000 : 0xFFFFFFFF, dark ? 0.50f : 0.58f);
+            FILL.setShader(null);
+            FILL.setColor(U.alpha(baseC, Math.min(0.92f, tint + 0.24f)));
+            c.drawRect(RF, FILL);
+            FILL.setShader(new LinearGradient(l, t, r, b,
+                    new int[]{U.alpha(0xFFFFFFFF, dark ? 0.18f : 0.36f), 0x00FFFFFF, U.alpha(0xFFFFFFFF, dark ? 0.07f : 0.16f)},
+                    new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+            c.drawRect(RF, FILL);
+            FILL.setShader(new LinearGradient(0, t, 0, t + h * 0.40f,
+                    U.alpha(0xFFFFFFFF, dark ? 0.12f : 0.24f), 0x00FFFFFF, Shader.TileMode.CLAMP));
+            c.drawRect(RF, FILL);
+            FILL.setShader(null);
+        } else if (!solid) {
             locate(host, LOC);
             // bitmap kecil -> ruang jendela (skala), lalu ruang jendela -> ruang lokal host (geser)
             MAT.setScale(winW / (float) bd.getWidth(), winH / (float) bd.getHeight());

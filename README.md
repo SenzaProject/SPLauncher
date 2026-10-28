@@ -12,6 +12,24 @@ Catatan build: D8 lama di bundletool crash tanpa `javac -parameters` (sudah ada 
 JANGAN hilangkan `sp-release.p12`; keystore yang sama dibutuhkan agar APK baru bisa menimpa versi lama.
 Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika murni: lihat `tools/tests/README.md`.
 
+## v1.0.0 (Beta Test)
+- **Versi**: VERSION_NAME `1.0.0 (Beta Test)`, VERSION_CODE 4 (dinaikkan agar bisa menimpa build 3).
+- **Perbaikan blur**: slider "Intensitas Blur" sebelumnya tidak punya posisi "tanpa blur" (0% tetap buram) dan rentang
+  efeknya sempit. Kini 0% = tanpa blur, 1-100% = bitmap makin kecil + radius makin besar; pengecilan bertahap
+  (tanpa aliasing); perhitungan blur pindah ke thread latar (`Glass.prepare` / `Glass.commit`) sehingga UI tidak tersendat.
+- **Mode Kaca** (Pengaturan > Liquid Glass): Blur (penuh), **Kaca Cair** (ringan: tanpa sampling backdrop, warna dasar dari
+  rata-rata wallpaper + kilau), Padat. Menggantikan toggle "Kurangi Transparansi" (nilai lama dimigrasikan ke Padat).
+- **Recents tumpukan kartu**: Pengaturan > Pengalih Aplikasi > Gaya Kartu (Berjajar / Tumpukan, default Tumpukan).
+  Kartu saling menimpa, yang di tengah paling besar dan paling depan, geser berhenti = otomatis menempel ke tengah.
+
+- **Zona atas gaya iOS 27**: tarik dari sudut kiri atas = Pusat Notifikasi, tengah = Cari, sudut kanan atas = Control Center
+  (Pengaturan > Gestur > "Zona Atas Gaya iOS 27", default aktif; matikan untuk kembali ke pembagian lama kiri/tengah = Notifikasi).
+
+- **Ikon bawaan iOS 27**: 15 peran aplikasi sistem (Telepon, Pesan, Kamera, Pengaturan, Jam, Kalkulator, Galeri, Mail, Catatan,
+  File, Kontak, Kompas, Cuaca, Perekam Suara, Musik) kini memakai sprite PNG dari lembar ikon iOS 27
+  (`res/drawable-nodpi/ios_*.png`, 192px). Kalender dan Unduhan tetap digambar glyph (tanggal harus dinamis).
+  Catatan: ini gambar bergaya Apple; hati-hati bila APK dipublikasikan luas (potensi klaim hak cipta/merek).
+
 ## v1.2.0
 - **Pengalih Aplikasi iOS 27** (`AppSwitcher`, `Recents`, `SPAccessibilityService`): kartu aplikasi berjajar horizontal di atas wallpaper
   yang diburamkan, ikon + nama di atas kartu, ketuk = buka, geser kartu ke atas = tutup, tombol "Hapus Semua".

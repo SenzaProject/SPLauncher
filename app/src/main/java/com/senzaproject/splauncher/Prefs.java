@@ -22,13 +22,20 @@ final class Prefs {
     boolean labels() { return sp.getBoolean("labels", true); }
     boolean showDock() { return sp.getBoolean("dock", true); }
     int blur() { return U.clamp(sp.getInt("blur", 60), 0, 100); }
+    /** 0 = Blur penuh, 1 = Kaca Cair (ringan, tanpa sampling backdrop), 2 = Padat. "Kurangi Transparansi" lama = Padat. */
+    int glassMode() {
+        if (!sp.contains("glassMode") && sp.getBoolean("reduceTransp", false)) return Glass.MODE_SOLID; // migrasi dari v1.2.0
+        return U.clamp(sp.getInt("glassMode", 0), 0, 2);
+    }
     int glassOpacity() { return U.clamp(sp.getInt("glassOpacity", 35), 10, 80); }
-    boolean reduceTransparency() { return sp.getBoolean("reduceTransp", false); }
+    boolean reduceTransparency() { return glassMode() == Glass.MODE_SOLID; }
     boolean reduceMotion() { return sp.getBoolean("reduceMotion", false); }
     boolean haptics() { return sp.getBoolean("haptics", true); }
     boolean autoAdd() { return sp.getBoolean("autoAdd", true); }
     String iconPack() { return sp.getString("iconPack", IconPacks.BUILTIN); }
     boolean topGestures() { return sp.getBoolean("topGestures", true); }
+    /** Zona tarik dari atas gaya iOS 27: kiri = Pusat Notifikasi, tengah = Cari, kanan = Control Center. */
+    boolean topZones27() { return sp.getBoolean("topZones27", true); }
     boolean notifBadges() { return sp.getBoolean("notifBadges", true); }
     int wallpaper() { return sp.getInt("wallpaper", 0); } // 0..5 preset, -1 = kustom
     int tint() { return TINTS[U.clamp(sp.getInt("tint", 0), 0, TINTS.length - 1)]; }
@@ -52,6 +59,7 @@ final class Prefs {
     boolean switcherLabels() { return sp.getBoolean("switcherLabels", true); }
     boolean switcherClearAll() { return sp.getBoolean("switcherClearAll", true); }
     boolean switcherKill() { return sp.getBoolean("switcherKill", true); }
+    int switcherStyle() { return U.clamp(sp.getInt("switcherStyle", 1), 0, 1); }    // 0 berjajar, 1 tumpukan kartu
     int switcherCardSize() { return U.clamp(sp.getInt("switcherCardSize", 62), 50, 80); }
     int wallpaperRev() { return sp.getInt("wallpaperRev", 0); }
     int layoutRev() { return sp.getInt("layoutRev", 0); }
@@ -73,7 +81,7 @@ final class Prefs {
     /** Tanda tangan nilai untuk mendeteksi perubahan. */
     String signature(Context c) {
         return theme() + "|" + iconStyle() + "|" + cols() + "|" + iconScale() + "|" + labels() + "|" + showDock()
-                + "|" + blur() + "|" + glassOpacity() + "|" + reduceTransparency() + "|" + reduceMotion()
+                + "|" + blur() + "|" + glassMode() + "|" + glassOpacity() + "|" + reduceTransparency() + "|" + reduceMotion()
                 + "|" + wallpaper() + "|" + tintIndex() + "|" + wallpaperRev() + "|" + layoutRev() + "|" + isDark(c)
                 + "|" + iconPack() + "|" + notifBadges()
                 + "|" + iconShape() + "|" + labelSize() + "|" + rowsPref() + "|" + dockRadius() + "|" + dockOpacity()

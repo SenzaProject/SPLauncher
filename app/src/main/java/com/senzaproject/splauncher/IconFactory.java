@@ -119,7 +119,8 @@ final class IconFactory {
             IconPacks.Role role = IconPacks.roleFor(a);
             if (role != null) {
                 Bitmap base = IconPacks.drawRole(role, size);
-                return finish(base, sq, size, style, true, tint, true, true);
+                boolean sprite = IconPacks.hasSprite(role); // sprite sudah punya sorot kaca sendiri
+                return finish(base, sq, size, style, true, tint, !sprite, !sprite);
             }
         }
 

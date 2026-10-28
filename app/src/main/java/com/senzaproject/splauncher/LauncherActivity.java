@@ -438,21 +438,25 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         final int id = prefs.wallpaper(), rev = prefs.wallpaperRev();
         if (wallLoading) return;
         if (id == loadedWallId && rev == loadedWallRev && w == loadedW && h == loadedH && prefs.blur() == loadedBlur && Glass.blurred != null) {
-            Glass.reduce = prefs.reduceTransparency();
+            // wallpaper & blur tidak berubah: cukup terapkan mode kaca (Blur / Kaca Cair / Padat)
+            Glass.setMode(prefs.reduceTransparency(), prefs.glassMode());
             return;
         }
         wallLoading = true;
         final int blur = prefs.blur();
         final boolean reduce = prefs.reduceTransparency();
+        final int mode = prefs.glassMode();
         exec.execute(new Runnable() {
             @Override public void run() {
                 final Bitmap bmp = Wallpapers.render(LauncherActivity.this, prefs, w, h);
+                // hitung blur di thread latar (sebelumnya di thread utama sehingga UI tersendat saat slider diubah)
+                final Glass.Backdrop bd = Glass.prepare(bmp, blur);
                 main.post(new Runnable() {
                     @Override public void run() {
                         wallLoading = false;
                         loadedWallId = id; loadedWallRev = rev; loadedW = w; loadedH = h; loadedBlur = blur;
                         wallView.set(bmp);
-                        Glass.setBackdrop(bmp, blur, reduce);
+                        Glass.commit(bd, reduce, mode);
                         applyBarIcons(bmp);
                         if (!prefs.signature(LauncherActivity.this).equals(lastSig)) scheduleRebuild();
                     }
@@ -896,8 +900,14 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         pullSheet = null;
         if (sheet != null || !prefs.topGestures()) return;
         if (y < insTop + U.dp(this, 120)) {
-            pullSheet = makeSheet(x > root.getWidth() * 0.55f ? 2 : 1);
-            pullSheet.setProgress(0f);
+            float fx = x / Math.max(1f, (float) root.getWidth());
+            int mode;
+            if (prefs.topZones27()) mode = fx < 0.36f ? 1 : (fx > 0.64f ? 2 : 0); // 0 = tengah: Cari
+            else mode = fx > 0.55f ? 2 : 1;
+            if (mode != 0) {
+                pullSheet = makeSheet(mode);
+                pullSheet.setProgress(0f);
+            }
         }
     }
 

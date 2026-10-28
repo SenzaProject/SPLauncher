@@ -123,11 +123,11 @@ public class SettingsActivity extends Activity {
         // --- Liquid Glass
         section("LIQUID GLASS");
         LinearLayout c2 = card();
-        c2.addView(seek("Intensitas Blur", "blur", 0, 100, prefs.blur(), "%"));
+        c2.addView(segmented("Mode Kaca", "glassMode", new String[]{"Blur", "Kaca Cair", "Padat"}, new int[]{0, 1, 2}, prefs.glassMode()));
+        c2.addView(divider());
+        c2.addView(seek("Intensitas Blur (mode Blur)", "blur", 0, 100, prefs.blur(), "%"));
         c2.addView(divider());
         c2.addView(seek("Kepekatan Panel", "glassOpacity", 10, 80, prefs.glassOpacity(), "%"));
-        c2.addView(divider());
-        c2.addView(toggle("Kurangi Transparansi", "reduceTransp", prefs.reduceTransparency()));
         c2.addView(divider());
         c2.addView(toggle("Kurangi Gerakan", "reduceMotion", prefs.reduceMotion()));
         c2.addView(divider());
@@ -215,6 +215,8 @@ public class SettingsActivity extends Activity {
         c9.addView(divider());
         c9.addView(toggle("Hentikan Aplikasi Saat Digeser Tutup", "switcherKill", prefs.switcherKill()));
         c9.addView(divider());
+        c9.addView(segmented("Gaya Kartu", "switcherStyle", new String[]{"Berjajar", "Tumpukan"}, new int[]{0, 1}, prefs.switcherStyle()));
+        c9.addView(divider());
         c9.addView(seek("Ukuran Kartu", "switcherCardSize", 50, 80, prefs.switcherCardSize(), "%"));
         c9.addView(divider());
         c9.addView(action("Coba Pengalih Aplikasi", new Runnable() { @Override public void run() { testSwitcher(); } }, accent));
@@ -234,8 +236,10 @@ public class SettingsActivity extends Activity {
         section("WIDGET, NOTIFIKASI & CONTROL CENTER");
         LinearLayout c5 = card();
         c5.addView(toggle("Gestur Tarik dari Atas", "topGestures", prefs.topGestures()));
-        c5.addView(note("Tarik ke bawah dari bagian atas Home: sisi kiri/tengah membuka Pusat Notifikasi, sisi kanan "
-                + "membuka Control Center. Tarik dari bagian tengah layar untuk pencarian."));
+        c5.addView(divider());
+        c5.addView(toggle("Zona Atas Gaya iOS 27 (kiri Notifikasi, tengah Cari, kanan Control Center)", "topZones27", prefs.topZones27()));
+        c5.addView(note("Tarik ke bawah dari bagian atas Home. Mode iOS 27: sudut kiri = Pusat Notifikasi, tengah = Cari, "
+                + "sudut kanan = Control Center. Jika dimatikan: kiri/tengah = Notifikasi, kanan = Control Center."));
         c5.addView(divider());
         notifStatus = new TextView(this);
         c5.addView(statusRow("Akses Notifikasi", notifStatus, new Runnable() {
@@ -483,7 +487,7 @@ public class SettingsActivity extends Activity {
         head.addView(names);
         c.addView(head);
 
-        String ver = "1.1.0", build = "2";
+        String ver = "1.0.0 (Beta Test)", build = "4";
         try {
             PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
             ver = pi.versionName;

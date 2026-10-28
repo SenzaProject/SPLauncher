@@ -85,6 +85,31 @@ final class IconPacks {
         role("downloads", R.drawable.sym_download, 0xFF5CC2FF, 0xFF1C74FF, 0xFFFFFFFF, 0.56f);
     }
 
+    /**
+     * Sprite ikon iOS 27 (res/drawable-nodpi/ios_*.png, dipotong dari lembar ikon yang diberikan pengguna) per peran.
+     * Peran tanpa sprite (kalender: tanggal harus dinamis; unduhan) tetap digambar dengan glyph bawaan.
+     */
+    private static final HashMap<String, Integer> SPRITE = new HashMap<>();
+    static {
+        SPRITE.put("phone", R.drawable.ios_telepon);
+        SPRITE.put("messages", R.drawable.ios_pesan);
+        SPRITE.put("camera", R.drawable.ios_kamera);
+        SPRITE.put("settings", R.drawable.ios_pengaturan);
+        SPRITE.put("clock", R.drawable.ios_jam);
+        SPRITE.put("calculator", R.drawable.ios_kalkulator);
+        SPRITE.put("gallery", R.drawable.ios_foto);
+        SPRITE.put("mail", R.drawable.ios_mail);
+        SPRITE.put("notes", R.drawable.ios_catatan);
+        SPRITE.put("files", R.drawable.ios_file);
+        SPRITE.put("contacts", R.drawable.ios_kontak);
+        SPRITE.put("compass", R.drawable.ios_kompas);
+        SPRITE.put("weather", R.drawable.ios_cuaca);
+        SPRITE.put("recorder", R.drawable.ios_memo_suara);
+        SPRITE.put("music", R.drawable.ios_musik);
+    }
+
+    static boolean hasSprite(Role r) { return r != null && SPRITE.containsKey(r.name); }
+
     /** Aplikasi merek pihak ketiga: ikonnya dipertahankan agar tidak membingungkan pengguna. */
     private static final HashSet<String> BRAND = new HashSet<>(Arrays.asList(
             "com.google.android.apps.photos", "com.android.chrome", "com.google.android.gm",
@@ -186,6 +211,18 @@ final class IconPacks {
 
     /** Gambar ikon peran: squircle gradien + glyph putih dengan bayangan lembut. */
     static Bitmap drawRole(Role r, int size) {
+        Integer spriteRes = SPRITE.get(r.name);
+        if (spriteRes != null && app != null) {
+            try {
+                Drawable sd = app.getDrawable(spriteRes);
+                if (sd != null) {
+                    Bitmap sb = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+                    sd.setBounds(0, 0, size, size);
+                    sd.draw(new Canvas(sb));
+                    return sb;
+                }
+            } catch (Throwable ignored) { }
+        }
         Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(bmp);
         Path sq = IconFactory.squircle(size);

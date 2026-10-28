@@ -48,6 +48,13 @@ final class AppSwitcher extends FrameLayout {
     private final ExecutorService exec = Executors.newSingleThreadExecutor();
     private final int slop;
     private final int cardW, cardH, radius;
+    /** Mode tumpukan kartu: kartu saling menimpa, yang di tengah paling besar dan paling depan. */
+    private final boolean stacked;
+    private final int overlap;
+    private boolean touching;
+    private final Runnable snapRun = new Runnable() {
+        @Override public void run() { snapToNearest(); }
+    };
     private boolean closing;
     private boolean tapValid;
     private float tapX, tapY;
@@ -73,6 +80,8 @@ final class AppSwitcher extends FrameLayout {
         cardW = Math.max(U.dp(a, 120), cw);
         cardH = Math.max(U.dp(a, 160), ch);
         radius = U.dp(a, 28);
+        stacked = prefs.switcherStyle() == 1;
+        overlap = stacked ? Math.round(cardW * 0.40f) : 0;
 
         hsv = new HorizontalScrollView(act);
         hsv.setHorizontalScrollBarEnabled(false);
@@ -85,16 +94,34 @@ final class AppSwitcher extends FrameLayout {
         strip.setGravity(Gravity.CENTER_VERTICAL);
         strip.setClipChildren(false);
         int side = Math.max(0, (w - cardW) / 2);
-        strip.setPadding(side, a.insTop, side - U.dp(a, 16) > 0 ? side - U.dp(a, 16) : 0,
-                a.insBottom + U.dp(a, 70));
+        int padEnd = stacked ? side + overlap : (side - U.dp(a, 16) > 0 ? side - U.dp(a, 16) : 0);
+        strip.setPadding(side, a.insTop, padEnd, a.insBottom + U.dp(a, 70));
         hsv.addView(strip, new FrameLayout.LayoutParams(-2, -1));
         addView(hsv, new FrameLayout.LayoutParams(-1, -1));
+        if (stacked) {
+            hsv.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+                @Override public void onScrollChange(View v, int x, int y, int ox, int oy) {
+                    updateStack();
+                    if (!touching) {
+                        removeCallbacks(snapRun);
+                        postDelayed(snapRun, 110);
+                    }
+                }
+            });
+            strip.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                @Override public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
+                    updateStack();
+                }
+            });
+        }
 
         hsv.setOnTouchListener(new View.OnTouchListener() {
             @Override public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         tapValid = true;
+                        touching = true;
+                        removeCallbacks(snapRun);
                         tapX = e.getRawX(); tapY = e.getRawY(); tapT = e.getEventTime();
                         break;
                     case MotionEvent.ACTION_MOVE:
@@ -103,9 +130,13 @@ final class AppSwitcher extends FrameLayout {
                     case MotionEvent.ACTION_UP:
                         if (tapValid && e.getEventTime() - tapT < 400) a.closeSwitcher(true);
                         tapValid = false;
+                        touching = false;
+                        if (stacked) { removeCallbacks(snapRun); postDelayed(snapRun, 140); }
                         break;
                     case MotionEvent.ACTION_CANCEL:
                         tapValid = false;
+                        touching = false;
+                        if (stacked) { removeCallbacks(snapRun); postDelayed(snapRun, 140); }
                         break;
                     default:
                         break;
@@ -167,6 +198,7 @@ final class AppSwitcher extends FrameLayout {
     void close(boolean animate, final Runnable end) {
         if (closing) return;
         closing = true;
+        removeCallbacks(snapRun);
         exec.shutdownNow();
         if (!animate || prefs.reduceMotion()) {
             end.run();
@@ -185,6 +217,37 @@ final class AppSwitcher extends FrameLayout {
             c.drawColor(0xFF000000);
         }
         c.drawColor(dark ? 0x80000000 : 0x5C000000);
+    }
+
+    // ------------------------------------------------------------------ tumpukan kartu
+
+    /** Atur skala dan urutan gambar tiap kartu menurut jaraknya dari tengah layar. */
+    private void updateStack() {
+        if (!stacked) return;
+        int n = strip.getChildCount();
+        float vc = hsv.getScrollX() + hsv.getWidth() / 2f;
+        float pitch = Math.max(1f, cardW - overlap);
+        for (int i = 0; i < n; i++) {
+            View sl = strip.getChildAt(i);
+            float d = (sl.getLeft() + sl.getWidth() / 2f - vc) / pitch;   // 0 = di tengah
+            float ad = Math.min(Math.abs(d), 3f);
+            float sc = 1f - 0.075f * ad;
+            sl.setScaleX(sc);
+            sl.setScaleY(sc);
+            // kartu terdekat dari tengah digambar paling depan
+            sl.setTranslationZ(U.dpf(a, 40) - ad * U.dpf(a, 10));
+        }
+    }
+
+    /** Setelah geser berhenti, rapikan agar satu kartu tepat di tengah. */
+    private void snapToNearest() {
+        if (!stacked || closing || touching) return;
+        int n = strip.getChildCount();
+        if (n == 0) return;
+        float pitch = Math.max(1f, cardW - overlap);
+        int target = Math.round(U.clampf(hsv.getScrollX() / pitch, 0f, n - 1f));
+        int x = Math.round(target * pitch);
+        if (Math.abs(x - hsv.getScrollX()) > 1) hsv.smoothScrollTo(x, 0);
     }
 
     // ------------------------------------------------------------------ isi
@@ -221,7 +284,7 @@ final class AppSwitcher extends FrameLayout {
         slot.setClipChildren(false);
         slot.setTag(app);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(cardW, -2);
-        slp.setMarginEnd(U.dp(a, 16));
+        slp.setMarginEnd(stacked ? -overlap : U.dp(a, 16));
         strip.addView(slot, slp);
 
         // kepala: ikon + nama
