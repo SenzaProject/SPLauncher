@@ -369,10 +369,10 @@ public class SettingsActivity extends Activity {
         LinearLayout t = card();
         int th = prefs.theme();
         t.addView(cardsRow(
-                cardChoice(themePreview(0xFFE8F1FF, 0xFFB9D3F5), "Terang", th == Prefs.THEME_LIGHT, setTheme(Prefs.THEME_LIGHT)),
-                cardChoice(themePreview(0xFF24262E, 0xFF0A0B10), "Gelap", th == Prefs.THEME_DARK, setTheme(Prefs.THEME_DARK)),
-                cardChoice(themePreview(0xFFD9E7FA, 0xFF12151C), "Default", th == Prefs.THEME_SYSTEM, setTheme(Prefs.THEME_SYSTEM)),
-                cardChoice(themePreview(0xFFFFD9A0, 0xFF1B2A55), "Jadwal", th == Prefs.THEME_SCHEDULE, setTheme(Prefs.THEME_SCHEDULE))));
+                cardChoice(themePreview(0xFFE8F1FF, 0xFFB9D3F5), "Terang", th == Prefs.THEME_LIGHT, applyTheme(Prefs.THEME_LIGHT)),
+                cardChoice(themePreview(0xFF24262E, 0xFF0A0B10), "Gelap", th == Prefs.THEME_DARK, applyTheme(Prefs.THEME_DARK)),
+                cardChoice(themePreview(0xFFD9E7FA, 0xFF12151C), "Default", th == Prefs.THEME_SYSTEM, applyTheme(Prefs.THEME_SYSTEM)),
+                cardChoice(themePreview(0xFFFFD9A0, 0xFF1B2A55), "Jadwal", th == Prefs.THEME_SCHEDULE, applyTheme(Prefs.THEME_SCHEDULE))));
         t.addView(note("Default mengikuti mode gelap sistem. Jadwal beralih otomatis ke tampilan gelap pada jam yang kamu atur."));
         page.addView(t);
 
@@ -866,7 +866,7 @@ public class SettingsActivity extends Activity {
         return f;
     }
 
-    private Runnable setTheme(final int value) {
+    private Runnable applyTheme(final int value) {
         return new Runnable() {
             @Override public void run() {
                 prefs.put("theme", value);
