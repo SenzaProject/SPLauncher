@@ -184,13 +184,15 @@ final class AppSwitcher extends FrameLayout {
 
     // ------------------------------------------------------------------ siklus
 
-    void open() {
+    void open(boolean instant) {
         populate();
         if (!prefs.reduceMotion()) {
-            setAlpha(0f);
             hsv.setScaleX(1.1f);
             hsv.setScaleY(1.1f);
-            animate().alpha(1f).setDuration(200).start();
+            if (!instant) {
+                setAlpha(0f);
+                animate().alpha(1f).setDuration(200).start();
+            }
             hsv.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(new DecelerateInterpolator(1.6f)).start();
         }
     }
@@ -231,9 +233,19 @@ final class AppSwitcher extends FrameLayout {
             View sl = strip.getChildAt(i);
             float d = (sl.getLeft() + sl.getWidth() / 2f - vc) / pitch;   // 0 = di tengah
             float ad = Math.min(Math.abs(d), 3f);
-            float sc = 1f - 0.075f * ad;
+            float sc = 1f - 0.06f * ad;
+            // pivot di tengah-atas: judul (ikon + nama) semua sejajar di satu baris, kartu mengecil ke bawah
+            sl.setPivotX(sl.getWidth() / 2f);
+            sl.setPivotY(0f);
             sl.setScaleX(sc);
             sl.setScaleY(sc);
+            // kartu yang tidak di tengah digelapkan agar kartu utama menonjol
+            if (sl instanceof LinearLayout && ((LinearLayout) sl).getChildCount() > 1) {
+                View card = ((LinearLayout) sl).getChildAt(1);
+                if (card instanceof FrameLayout && ((FrameLayout) card).getChildCount() > 2) {
+                    ((FrameLayout) card).getChildAt(2).setAlpha(Math.min(0.5f, ad * 0.28f));
+                }
+            }
             // kartu terdekat dari tengah digambar paling depan
             sl.setTranslationZ(U.dpf(a, 40) - ad * U.dpf(a, 10));
         }
@@ -330,6 +342,10 @@ final class AppSwitcher extends FrameLayout {
         snap.setScaleType(ImageView.ScaleType.CENTER_CROP);
         snap.setVisibility(View.GONE);
         card.addView(snap, new FrameLayout.LayoutParams(-1, -1));
+        final View dim = new View(a);   // lapisan peredam (diatur di updateStack)
+        dim.setBackgroundColor(0xFF000000);
+        dim.setAlpha(0f);
+        card.addView(dim, new FrameLayout.LayoutParams(-1, -1));
         GradientDrawable border = new GradientDrawable();
         border.setCornerRadius(radius);
         border.setStroke(Math.max(1, U.dp(a, 1)), 0x33FFFFFF);

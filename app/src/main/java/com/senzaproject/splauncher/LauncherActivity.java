@@ -252,7 +252,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         }
         refreshBadges();
         applyStatusBar();
-        if (Recents.consumeOpenRequest()) main.post(switcherRun);
+        if (Recents.consumeOpenRequest() && switcher == null) main.post(switcherRun);
         String sig = prefs.signature(this);
         if (!sig.equals(lastSig)) scheduleRebuild();
     }
@@ -275,7 +275,10 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             if (edit) exitEdit();
             if (workspace.page() != 0) workspace.smoothTo(0);
             if (switcher != null) closeSwitcher(false);
-            if (wantSwitcher) main.post(switcherRun);
+            if (wantSwitcher) {
+                // langsung, bukan post: Pengalih Aplikasi sudah terpasang sebelum frame Home pertama digambar
+                if (root != null && root.getWidth() > 0) openSwitcher(true); else main.post(switcherRun);
+            }
         }
     }
 
@@ -972,7 +975,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     // ------------------------------------------------------------------ Layar Nol
 
     private final ZeroScreen.Host zeroHost = new ZeroScreen.Host() {
-        @Override public void onZeroClosed(ZeroScreen z) { if (zero == z) removeZero(); else { z.release(); overlayLayer.removeView(z); } }
+        @Override public void onZeroClosed(ZeroScreen z) { if (zero == z) removeZero(); else { z.release(); overlayLayer.removeView(z); if (zero == null) overlayLayer.setElevation(0f); } }
         @Override public boolean reduceMotion() { return prefs.reduceMotion(); }
         @Override public void onZeroSearch() { removeZero(); openSearch(); }
     };
@@ -983,11 +986,15 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (z == null) return;
         z.release();
         overlayLayer.removeView(z);
+        overlayLayer.setElevation(0f);
     }
 
     @Override public void onZeroBegin() {
         if (zero != null) removeZero();
         dismissMenu();
+        // Dock (GlassLayout) punya elevation 8dp sehingga digambar di atas sibling biasa. Naikkan lapisan overlay
+        // agar Layar Nol menutupi Dock, titik halaman, dan ikon Home.
+        overlayLayer.setElevation(U.dpf(this, 40));
         zero = new ZeroScreen(this, prefs, dark, insTop, insBottom, zeroHost);
         overlayLayer.addView(zero, new FrameLayout.LayoutParams(-1, -1));
         zero.setProgress(0f);
@@ -1384,7 +1391,10 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         }
     }
 
-    void openSwitcher() {
+    void openSwitcher() { openSwitcher(false); }
+
+    /** fromRecents = true: dibuka otomatis setelah Recents bawaan dialihkan; tampil seketika (tanpa memudar) agar Home tidak berkedip. */
+    void openSwitcher(boolean fromRecents) {
         if (switcher != null || root == null || root.getWidth() <= 0) return;
         dismissMenu();
         closeSearch();
@@ -1392,8 +1402,10 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (sheet != null) removeSheet(sheet);
         if (edit) exitEdit();
         switcher = new AppSwitcher(this);
+        // Dock punya elevation 8dp -> tanpa ini Dock tampil di atas Pengalih Aplikasi.
+        switcher.setElevation(U.dpf(this, 80));
         root.addView(switcher, new FrameLayout.LayoutParams(-1, -1));
-        switcher.open();
+        switcher.open(fromRecents);
         haptic(switcher);
     }
 

@@ -116,9 +116,9 @@ public class SPAccessibilityService extends AccessibilityService {
             onWindow(pkg, cls);
         } else if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             if (fgEligible && pkg.equals(fgPkg) && prefs.switcherSnapshots()
-                    && SystemClock.uptimeMillis() - lastShot > 6000L) {
+                    && SystemClock.uptimeMillis() - lastShot > 2500L) {
                 main.removeCallbacks(shotRun);
-                main.postDelayed(shotRun, 500L);
+                main.postDelayed(shotRun, 600L);
             }
         }
     }

@@ -4,6 +4,10 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -47,8 +51,24 @@ final class ZeroScreen extends FrameLayout {
         slop = ViewConfiguration.get(c).getScaledTouchSlop();
         setClickable(true);
 
-        scrim = new View(c);
-        scrim.setBackground(new Glass.GlassDrawable(scrim, 0, 0.6f, dark));
+        // Latar OPAK (wallpaper diburamkan + peredam). Sebelumnya hanya kaca semi-transparan sehingga ikon Home
+        // dan Dock di belakangnya ikut terlihat menembus widget.
+        final boolean darkTheme = dark;
+        final Paint bgPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+        final Rect dst = new Rect();
+        scrim = new View(c) {
+            @Override protected void onDraw(Canvas cv) {
+                Bitmap bg = Glass.blurred;
+                if (bg != null && !bg.isRecycled()) {
+                    dst.set(0, 0, getWidth(), getHeight());
+                    cv.drawBitmap(bg, null, dst, bgPaint);
+                } else {
+                    cv.drawColor(darkTheme ? 0xFF101014 : 0xFF8E8E93);
+                }
+                cv.drawColor(darkTheme ? 0x8C000000 : 0x40000000);
+            }
+        };
+        scrim.setWillNotDraw(false);
         addView(scrim, new LayoutParams(-1, -1));
 
         body = new FrameLayout(c);

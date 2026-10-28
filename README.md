@@ -84,3 +84,10 @@ Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika m
 
 ## Belum ada
 backup/restore susunan Home, sembunyikan aplikasi, Smart Stack, drag antar-folder, konsep layar kunci.
+
+## v1.0.1 (Beta Test)
+- **Recents (Pengalih Aplikasi)**: Dock tidak lagi tampil di atas Recents (Dock punya elevation 8dp; Pengalih Aplikasi kini dinaikkan di atasnya).
+  Judul kartu (ikon + nama) kini sejajar satu baris, kartu samping digelapkan agar kartu tengah menonjol.
+  Saat dialihkan dari Recents bawaan, Pengalih Aplikasi dipasang langsung (tanpa memudar) sehingga Home tidak berkedip.
+  Pratinjau lebih segar (ambil ulang tiap 2,5 detik, sebelumnya 6 detik).
+- **Layar Nol**: latar kini opak (wallpaper diburamkan), menutupi Dock, titik halaman, dan ikon Home sehingga tidak tembus lagi di balik widget.
