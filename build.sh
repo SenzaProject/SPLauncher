@@ -4,7 +4,7 @@ unset JAVA_TOOL_OPTIONS
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 TC="${SP_TOOLCHAIN:-$HOME/sp-toolchain}"
-[ -f "$TC/android.jar" ] || "$ROOT/setup-toolchain.sh"
+[ -f "$TC/android.jar" ] || bash "$ROOT/setup-toolchain.sh"
 AJ="$TC/android.jar"; BT="$TC/bundletool.jar"; AAPT2="$TC/aapt2"
 VERSION_NAME="$(grep -E '^VERSION_NAME=' "$ROOT/version.properties" | cut -d= -f2)"
 VERSION_CODE="$(grep -E '^VERSION_CODE=' "$ROOT/version.properties" | cut -d= -f2)"

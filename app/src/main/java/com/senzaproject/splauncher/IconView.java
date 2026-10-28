@@ -68,7 +68,7 @@ final class IconView extends View implements ItemHolder {
         showLabel = labelOn;
         dark = isDark;
         reduceMotion = p.reduceMotion();
-        labelSize = U.sp(getContext(), 11f) * U.clampf(p.iconScale() / 100f, 0.9f, 1.15f);
+        labelSize = U.sp(getContext(), p.labelSize()) * U.clampf(p.iconScale() / 100f, 0.9f, 1.15f);
         tp.setTextSize(labelSize);
         lineH = tp.getFontSpacing();
         bindToken++;

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SP Launcher</string>
+    <string name="a11y_label">SP Launcher</string>
+    <string name="a11y_desc">Dipakai SP Launcher untuk mengunci layar dengan ketuk dua kali, mencatat aplikasi terbaru untuk Pengalih Aplikasi iOS 27, dan mengambil pratinjau jendela. Tidak membaca isi layar dan tidak mengirim data apa pun.</string>
 </resources>

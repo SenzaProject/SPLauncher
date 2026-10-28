@@ -33,6 +33,26 @@ final class Prefs {
     int wallpaper() { return sp.getInt("wallpaper", 0); } // 0..5 preset, -1 = kustom
     int tint() { return TINTS[U.clamp(sp.getInt("tint", 0), 0, TINTS.length - 1)]; }
     int tintIndex() { return U.clamp(sp.getInt("tint", 0), 0, TINTS.length - 1); }
+    // --- kustomisasi tambahan (v1.2.0)
+    int iconShape() { return U.clamp(sp.getInt("iconShape", 0), 0, 2); }          // 0 squircle, 1 bulat, 2 kotak
+    int labelSize() { return U.clamp(sp.getInt("labelSize", 11), 9, 14); }
+    int rowsPref() { return U.clamp(sp.getInt("rowsPref", 0), 0, 8); }            // 0 = otomatis
+    int dockRadius() { return U.clamp(sp.getInt("dockRadius", 30), 14, 40); }
+    int dockOpacity() { return U.clamp(sp.getInt("dockOpacity", 0), 0, 80); }     // 0 = ikuti kepekatan panel
+    boolean pageDots() { return sp.getBoolean("pageDots", true); }
+    boolean hideStatusBar() { return sp.getBoolean("hideStatusBar", false); }
+    boolean lockLayout() { return sp.getBoolean("lockLayout", false); }
+    int wallDim() { return U.clamp(sp.getInt("wallDim", 0), 0, 60); }
+    boolean pullSearch() { return sp.getBoolean("pullSearch", true); }
+    // --- gestur & Pengalih Aplikasi
+    int doubleTap() { return U.clamp(sp.getInt("doubleTap", 1), 0, 3); }          // 0 mati, 1 kunci layar, 2 cari, 3 pengalih
+    boolean switcherOnRecents() { return sp.getBoolean("switcherOnRecents", true); }
+    boolean dockSwipeSwitcher() { return sp.getBoolean("dockSwipeSwitcher", true); }
+    boolean switcherSnapshots() { return sp.getBoolean("switcherSnapshots", true); }
+    boolean switcherLabels() { return sp.getBoolean("switcherLabels", true); }
+    boolean switcherClearAll() { return sp.getBoolean("switcherClearAll", true); }
+    boolean switcherKill() { return sp.getBoolean("switcherKill", true); }
+    int switcherCardSize() { return U.clamp(sp.getInt("switcherCardSize", 62), 50, 80); }
     int wallpaperRev() { return sp.getInt("wallpaperRev", 0); }
     int layoutRev() { return sp.getInt("layoutRev", 0); }
     void bumpLayout() { put("layoutRev", layoutRev() + 1); }
@@ -55,6 +75,8 @@ final class Prefs {
         return theme() + "|" + iconStyle() + "|" + cols() + "|" + iconScale() + "|" + labels() + "|" + showDock()
                 + "|" + blur() + "|" + glassOpacity() + "|" + reduceTransparency() + "|" + reduceMotion()
                 + "|" + wallpaper() + "|" + tintIndex() + "|" + wallpaperRev() + "|" + layoutRev() + "|" + isDark(c)
-                + "|" + iconPack() + "|" + notifBadges();
+                + "|" + iconPack() + "|" + notifBadges()
+                + "|" + iconShape() + "|" + labelSize() + "|" + rowsPref() + "|" + dockRadius() + "|" + dockOpacity()
+                + "|" + pageDots() + "|" + hideStatusBar() + "|" + wallDim();
     }
 }

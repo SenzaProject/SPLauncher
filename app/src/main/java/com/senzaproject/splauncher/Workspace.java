@@ -20,6 +20,8 @@ final class Workspace extends ViewGroup {
         /** Jari dilepas; vy = kecepatan vertikal (px/detik), cancelled bila sentuhan dibatalkan. */
         void onPullEnd(float dy, float vy, boolean cancelled);
         void onEmptyLongPress(float x, float y);
+        /** Ketuk dua kali di area kosong Home. */
+        void onEmptyDoubleTap();
     }
 
     private static final int IDLE = 0, SCROLLING = 1, PULLING = 2;
@@ -35,6 +37,8 @@ final class Workspace extends ViewGroup {
     private boolean longPressEnabled = true;
     private Listener listener;
     private boolean longFired;
+    private long lastTapTime;
+    private float lastTapX, lastTapY;
     private final Runnable longPress = new Runnable() {
         @Override public void run() {
             if (state == IDLE && longPressEnabled && listener != null) {
@@ -193,6 +197,18 @@ final class Workspace extends ViewGroup {
                 } else if (state == PULLING) {
                     vt.computeCurrentVelocity(1000);
                     if (listener != null) listener.onPullEnd(e.getY() - downY, vt.getYVelocity(), false);
+                } else if (state == IDLE && !longFired && listener != null
+                        && Math.abs(e.getX() - downX) < slop * 2 && Math.abs(e.getY() - downY) < slop * 2) {
+                    long now = e.getEventTime();
+                    if (lastTapTime != 0 && now - lastTapTime <= ViewConfiguration.getDoubleTapTimeout()
+                            && Math.abs(e.getX() - lastTapX) < slop * 6 && Math.abs(e.getY() - lastTapY) < slop * 6) {
+                        lastTapTime = 0;
+                        listener.onEmptyDoubleTap();
+                    } else {
+                        lastTapTime = now;
+                        lastTapX = e.getX();
+                        lastTapY = e.getY();
+                    }
                 }
                 state = IDLE;
                 release();

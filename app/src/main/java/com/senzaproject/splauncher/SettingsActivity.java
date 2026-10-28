@@ -44,7 +44,7 @@ public class SettingsActivity extends Activity {
     private boolean dark;
     private int bg, card, fg, sub, line, accent;
     private LinearLayout page;
-    private TextView defaultStatus, packStatus, notifStatus, writeStatus, dndStatus;
+    private TextView defaultStatus, packStatus, notifStatus, writeStatus, dndStatus, a11yStatus, usageStatus;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -149,6 +149,86 @@ public class SettingsActivity extends Activity {
         c4.addView(divider());
         c4.addView(action("Reset Susunan Home Screen", new Runnable() { @Override public void run() { confirmReset(); } }, 0xFFFF453A));
         page.addView(c4);
+
+        // --- Ikon & layout (kustomisasi tambahan)
+        section("IKON & LAYOUT");
+        LinearLayout c6 = card();
+        c6.addView(segmented("Bentuk Ikon", "iconShape", new String[]{"Squircle", "Bulat", "Kotak"}, new int[]{0, 1, 2}, prefs.iconShape()));
+        c6.addView(divider());
+        c6.addView(seek("Ukuran Teks Label", "labelSize", 9, 14, prefs.labelSize(), " pt"));
+        c6.addView(divider());
+        c6.addView(segmented("Jumlah Baris", "rowsPref", new String[]{"Otomatis", "5", "6", "7"}, new int[]{0, 5, 6, 7}, prefs.rowsPref()));
+        c6.addView(divider());
+        c6.addView(toggle("Titik Halaman", "pageDots", prefs.pageDots()));
+        c6.addView(divider());
+        c6.addView(toggle("Sembunyikan Bilah Status", "hideStatusBar", prefs.hideStatusBar()));
+        c6.addView(divider());
+        c6.addView(toggle("Kunci Susunan Home", "lockLayout", prefs.lockLayout()));
+        c6.addView(note("Saat dikunci, ikon tidak bisa digeser/dihapus dan mode edit dinonaktifkan."));
+        page.addView(c6);
+
+        section("WALLPAPER & DOCK");
+        LinearLayout c7 = card();
+        c7.addView(seek("Redupkan Wallpaper", "wallDim", 0, 60, prefs.wallDim(), "%"));
+        c7.addView(divider());
+        c7.addView(seek("Kelengkungan Dock", "dockRadius", 14, 40, prefs.dockRadius(), " dp"));
+        c7.addView(divider());
+        c7.addView(seek("Kepekatan Dock (0 = ikuti panel)", "dockOpacity", 0, 80, prefs.dockOpacity(), "%"));
+        page.addView(c7);
+
+        // --- Gestur
+        section("GESTUR");
+        LinearLayout c8 = card();
+        c8.addView(segmented("Ketuk Dua Kali di Home", "doubleTap", new String[]{"Mati", "Kunci", "Cari", "Recents"},
+                new int[]{0, 1, 2, 3}, prefs.doubleTap()));
+        c8.addView(note("\"Kunci\" mengunci layar lewat layanan Aksesibilitas (lihat bagian Pengalih Aplikasi di bawah). "
+                + "Setelah terkunci, bangunkan layar dengan fitur ketuk dua kali bawaan perangkat."));
+        c8.addView(divider());
+        c8.addView(toggle("Tarik ke Bawah untuk Pencarian", "pullSearch", prefs.pullSearch()));
+        page.addView(c8);
+
+        // --- Pengalih Aplikasi
+        section("PENGALIH APLIKASI (RECENTS iOS 27)");
+        LinearLayout c9 = card();
+        a11yStatus = new TextView(this);
+        c9.addView(statusRow("Layanan Aksesibilitas", a11yStatus, new Runnable() {
+            @Override public void run() { open(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
+        }));
+        c9.addView(divider());
+        usageStatus = new TextView(this);
+        c9.addView(statusRow("Akses Penggunaan (cadangan)", usageStatus, new Runnable() {
+            @Override public void run() { open(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); }
+        }));
+        c9.addView(note("Layanan Aksesibilitas dipakai untuk mencatat aplikasi yang dibuka, mengalihkan layar Recents bawaan, "
+                + "dan mengambil pratinjau. Layanan ini tidak membaca isi layar dan tidak mengirim data apa pun. "
+                + "Akses Penggunaan hanya cadangan untuk daftar aplikasi terbaru (tanpa pratinjau)."));
+        c9.addView(divider());
+        c9.addView(toggle("Ganti Recents Sistem", "switcherOnRecents", prefs.switcherOnRecents()));
+        c9.addView(divider());
+        c9.addView(toggle("Geser ke Atas dari Dock", "dockSwipeSwitcher", prefs.dockSwipeSwitcher()));
+        c9.addView(divider());
+        c9.addView(toggle("Pratinjau Jendela (snapshot)", "switcherSnapshots", prefs.switcherSnapshots()));
+        c9.addView(divider());
+        c9.addView(toggle("Tampilkan Nama Aplikasi", "switcherLabels", prefs.switcherLabels()));
+        c9.addView(divider());
+        c9.addView(toggle("Tombol Hapus Semua", "switcherClearAll", prefs.switcherClearAll()));
+        c9.addView(divider());
+        c9.addView(toggle("Hentikan Aplikasi Saat Digeser Tutup", "switcherKill", prefs.switcherKill()));
+        c9.addView(divider());
+        c9.addView(seek("Ukuran Kartu", "switcherCardSize", 50, 80, prefs.switcherCardSize(), "%"));
+        c9.addView(divider());
+        c9.addView(action("Coba Pengalih Aplikasi", new Runnable() { @Override public void run() { testSwitcher(); } }, accent));
+        c9.addView(divider());
+        c9.addView(action("Hapus Pratinjau Tersimpan", new Runnable() {
+            @Override public void run() {
+                Recents.clearSnapshots(SettingsActivity.this);
+                Toast.makeText(SettingsActivity.this, "Pratinjau dihapus", Toast.LENGTH_SHORT).show();
+            }
+        }, 0xFFFF453A));
+        c9.addView(note("Pratinjau disimpan hanya di perangkat ini. Aplikasi yang memblokir tangkapan layar (mis. perbankan) "
+                + "tampil sebagai kartu ikon. Layar Recents bawaan tetap sebentar terlihat sebelum dialihkan; "
+                + "nama kelas Recents berbeda antar merek, jadi laporkan bila tidak terdeteksi di perangkat Anda."));
+        page.addView(c9);
 
         // --- Widget, notifikasi, Control Center
         section("WIDGET, NOTIFIKASI & CONTROL CENTER");
@@ -523,6 +603,12 @@ public class SettingsActivity extends Activity {
         return row;
     }
 
+    private void testSwitcher() {
+        Recents.requestOpen();
+        open(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                .setClass(this, LauncherActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
     private void open(Intent i) {
         try { startActivity(i); } catch (Throwable t) { Toast.makeText(this, "Tidak dapat membuka pengaturan", Toast.LENGTH_SHORT).show(); }
     }
@@ -544,6 +630,8 @@ public class SettingsActivity extends Activity {
             d = nm != null && nm.isNotificationPolicyAccessGranted();
         } catch (Throwable ignored) { }
         setStatus(dndStatus, d);
+        setStatus(a11yStatus, SPAccessibilityService.isEnabled(this));
+        setStatus(usageStatus, Recents.usageGranted(this));
         if (packStatus != null) packStatus.setText(IconPacks.labelOf(this, prefs.iconPack()));
     }
 

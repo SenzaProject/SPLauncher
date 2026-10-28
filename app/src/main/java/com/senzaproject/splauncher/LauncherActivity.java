@@ -57,10 +57,12 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
 
     static final class WallView extends View {
         Bitmap bmp;
+        int dim; // peredupan wallpaper 0..60 (%)
         WallView(Context c) { super(c); }
         void set(Bitmap b) { bmp = b; invalidate(); }
         @Override protected void onDraw(Canvas c) {
             if (bmp != null) c.drawBitmap(bmp, 0, 0, null); else c.drawColor(0xFF000000);
+            if (dim > 0) c.drawColor((Math.round(dim * 2.55f)) << 24);
         }
     }
 
@@ -106,6 +108,10 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     private final HashMap<Integer, AppWidgetHostView> hostViews = new HashMap<>();
     private WidgetPicker picker;
     private TopSheet sheet, pullSheet;
+    AppSwitcher switcher;
+    private final Runnable switcherRun = new Runnable() { @Override public void run() { openSwitcher(); } };
+    private float dsX, dsY;
+    private boolean dsOn;
     private int pendingId = -1;
     private AppWidgetProviderInfo pendingInfo;
 
@@ -209,6 +215,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
 
     @Override protected void onStop() {
         super.onStop();
+        if (switcher != null) closeSwitcher(false);
         try { widgetHost.stopListening(); } catch (Throwable ignored) { }
         NotificationService.removeListener(this);
     }
@@ -231,6 +238,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             store.reset();
         }
         refreshBadges();
+        applyStatusBar();
+        if (Recents.consumeOpenRequest()) main.post(switcherRun);
         String sig = prefs.signature(this);
         if (!sig.equals(lastSig)) scheduleRebuild();
     }
@@ -243,6 +252,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (Intent.ACTION_MAIN.equals(intent.getAction())) {
+            boolean wantSwitcher = Recents.consumeOpenRequest();
             dismissMenu();
             closePanel(false);
             closeSearch();
@@ -250,11 +260,14 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             if (sheet != null) removeSheet(sheet);
             if (edit) exitEdit();
             if (workspace.page() != 0) workspace.smoothTo(0);
+            if (switcher != null) closeSwitcher(false);
+            if (wantSwitcher) main.post(switcherRun);
         }
     }
 
     @Override public void onBackPressed() {
-        if (picker != null) picker.dismiss(true);
+        if (switcher != null) closeSwitcher(true);
+        else if (picker != null) picker.dismiss(true);
         else if (sheet != null) sheet.close();
         else if (menuScrim != null) dismissMenu();
         else if (panelDim != null) closePanel(true);
@@ -269,6 +282,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         lastRawX = ev.getRawX();
         lastRawY = ev.getRawY();
         if (!bypass && drag != null && drag.active()) return drag.onTouch(ev);
+        if (!bypass) trackDockSwipe(ev);
         return super.dispatchTouchEvent(ev);
     }
 
@@ -323,9 +337,10 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         int topPad = insTop + U.dp(this, 10);
         int reserved = (showDock ? dockH + dockBottom : insBottom) + dotsH + U.dp(this, 8);
         int availH = h - topPad - reserved;
-        float label = prefs.labels() ? U.dpf(this, 5) + U.sp(this, 11) * 1.3f : 0f;
+        float label = prefs.labels() ? U.dpf(this, 5) + U.sp(this, prefs.labelSize()) * 1.3f : 0f;
         float nat = iconSize + label + U.dpf(this, 22);
         rows = U.clamp((int) (availH / nat), land ? 2 : 4, 8);
+        if (prefs.rowsPref() > 0) rows = prefs.rowsPref();
         cellH = availH / rows;
         pageCap = cols * rows;
     }
@@ -338,6 +353,9 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (w <= 0 || h <= 0) return;
         lastSig = prefs.signature(this);
         computeMetrics(w, h);
+        IconFactory.setShape(prefs.iconShape());
+        wallView.dim = prefs.wallDim();
+        wallView.invalidate();
         loadWallpaperIfNeeded(w, h);
         store.ensure(this, repo, prefs, cols, rows, dockCap);
 
@@ -354,7 +372,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         // dock
         boolean showDock = prefs.showDock();
         dockPanel.setVisibility(showDock ? View.VISIBLE : View.GONE);
-        dockPanel.setGlass(30, Math.max(0.22f, prefs.glassOpacity() / 100f * 0.9f), dark);
+        dockPanel.setGlass(prefs.dockRadius(),
+                prefs.dockOpacity() > 0 ? prefs.dockOpacity() / 100f : Math.max(0.22f, prefs.glassOpacity() / 100f * 0.9f), dark);
         FrameLayout.LayoutParams dlp = (FrameLayout.LayoutParams) dockPanel.getLayoutParams();
         dlp.height = dockH;
         dlp.leftMargin = insLeft + U.dp(this, 14);
@@ -369,6 +388,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         FrameLayout.LayoutParams dotp = (FrameLayout.LayoutParams) dots.getLayoutParams();
         dotp.bottomMargin = showDock ? dockBottom + dockH + U.dp(this, 6) : insBottom + U.dp(this, 10);
         dots.setLayoutParams(dotp);
+        dots.setVisibility(prefs.pageDots() ? View.VISIBLE : View.GONE);
         FrameLayout.LayoutParams dn = (FrameLayout.LayoutParams) doneBtn.getLayoutParams();
         dn.topMargin = insTop + U.dp(this, 8);
         dn.rightMargin = insRight + U.dp(this, 16);
@@ -487,6 +507,10 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
 
     void enterEdit() {
         if (edit) return;
+        if (prefs.lockLayout()) {
+            Toast.makeText(this, "Susunan Home dikunci (Pengaturan > Home Screen)", Toast.LENGTH_SHORT).show();
+            return;
+        }
         edit = true;
         applyEdit(true);
     }
@@ -536,7 +560,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (edit) { drag.arm(v, true); return; }
         List<Menus.Action> acts = new ArrayList<>();
         final LayoutStore.Item it = v.item;
-        acts.add(new Menus.Action("Edit Layar Utama", new Runnable() { @Override public void run() { enterEdit(); } }));
+        if (!prefs.lockLayout()) acts.add(new Menus.Action("Edit Layar Utama", new Runnable() { @Override public void run() { enterEdit(); } }));
         if (it.type == LayoutStore.FOLDER) {
             final IconView fv = v;
             acts.add(new Menus.Action("Ganti Nama", new Runnable() { @Override public void run() { openFolder(fv, true); } }));
@@ -547,7 +571,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             appMenuItems(acts, v.app, it, null);
         }
         showMenu(rectOf(v), acts);
-        drag.arm(v, false);
+        if (!prefs.lockLayout()) drag.arm(v, false);
     }
 
     private void confirmRemove(final IconView v) {
@@ -889,12 +913,12 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             s.animateTo(open ? 1f : 0f, vy);
             return;
         }
-        if (!cancelled && (dy > U.dpf(this, 70) || vy > 1200f)) openSearch();
+        if (prefs.pullSearch() && !cancelled && (dy > U.dpf(this, 70) || vy > 1200f)) openSearch();
     }
 
     @Override public void onEmptyLongPress(float x, float y) {
         List<Menus.Action> acts = new ArrayList<>();
-        acts.add(new Menus.Action("Edit Layar Utama", new Runnable() { @Override public void run() { enterEdit(); } }));
+        if (!prefs.lockLayout()) acts.add(new Menus.Action("Edit Layar Utama", new Runnable() { @Override public void run() { enterEdit(); } }));
         acts.add(new Menus.Action("Tambah Widget", new Runnable() { @Override public void run() { openWidgetPicker(); } }));
         acts.add(new Menus.Action("Wallpaper & Tampilan", new Runnable() { @Override public void run() { openSettings(); } }));
         acts.add(new Menus.Action("Pengaturan SP Launcher", new Runnable() { @Override public void run() { openSettings(); } }));
@@ -906,7 +930,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     int widgetInsetX() { return Math.max(U.dp(this, 6), (cellW - iconSize) / 2); }
 
     int widgetInsetY() {
-        int block = iconSize + (prefs.labels() ? U.dp(this, 5) + Math.round(U.sp(this, 11) * 1.3f) : 0);
+        int block = iconSize + (prefs.labels() ? U.dp(this, 5) + Math.round(U.sp(this, prefs.labelSize()) * 1.3f) : 0);
         return U.clamp((cellH - block) / 2, U.dp(this, 5), U.dp(this, 18));
     }
 
@@ -1259,4 +1283,80 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     }
 
     private void openSettings() { startActivity(new Intent(this, SettingsActivity.class)); }
+
+    // ------------------------------------------------------------------ ketuk dua kali, Pengalih Aplikasi, bilah status
+
+    @Override public void onEmptyDoubleTap() {
+        if (edit || switcher != null) return;
+        switch (prefs.doubleTap()) {
+            case 1: SPAccessibilityService.lockScreen(this); break;
+            case 2: openSearch(); break;
+            case 3: openSwitcher(); break;
+            default: break;
+        }
+    }
+
+    void openSwitcher() {
+        if (switcher != null || root == null || root.getWidth() <= 0) return;
+        dismissMenu();
+        closeSearch();
+        if (picker != null) picker.dismiss(false);
+        if (sheet != null) removeSheet(sheet);
+        if (edit) exitEdit();
+        switcher = new AppSwitcher(this);
+        root.addView(switcher, new FrameLayout.LayoutParams(-1, -1));
+        switcher.open();
+        haptic(switcher);
+    }
+
+    void closeSwitcher(boolean animate) {
+        if (switcher == null) return;
+        final AppSwitcher s = switcher;
+        switcher = null;
+        s.close(animate, new Runnable() { @Override public void run() { root.removeView(s); } });
+    }
+
+    /** Geser ke atas dari dock membuka Pengalih Aplikasi. */
+    private void trackDockSwipe(MotionEvent ev) {
+        if (!prefs.dockSwipeSwitcher() || edit || switcher != null) { dsOn = false; return; }
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN: {
+                float[] p = toRoot(ev.getRawX(), ev.getRawY());
+                dsOn = dockEnabled() && p[1] >= dockTop() - U.dp(this, 6);
+                dsX = p[0];
+                dsY = p[1];
+                break;
+            }
+            case MotionEvent.ACTION_MOVE: {
+                if (!dsOn) break;
+                float[] q = toRoot(ev.getRawX(), ev.getRawY());
+                float dy = q[1] - dsY, dx = q[0] - dsX;
+                if (-dy > U.dp(this, 56) && -dy > Math.abs(dx) * 1.5f) {
+                    dsOn = false;
+                    sendCancel();
+                    openSwitcher();
+                }
+                break;
+            }
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                dsOn = false;
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void applyStatusBar() {
+        try {
+            WindowInsetsController c = getWindow().getInsetsController();
+            if (c == null) return;
+            if (prefs.hideStatusBar()) {
+                c.hide(WindowInsets.Type.statusBars());
+                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            } else {
+                c.show(WindowInsets.Type.statusBars());
+            }
+        } catch (Throwable ignored) { }
+    }
 }

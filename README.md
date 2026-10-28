@@ -12,6 +12,22 @@ Catatan build: D8 lama di bundletool crash tanpa `javac -parameters` (sudah ada 
 JANGAN hilangkan `sp-release.p12`; keystore yang sama dibutuhkan agar APK baru bisa menimpa versi lama.
 Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika murni: lihat `tools/tests/README.md`.
 
+## v1.2.0
+- **Pengalih Aplikasi iOS 27** (`AppSwitcher`, `Recents`, `SPAccessibilityService`): kartu aplikasi berjajar horizontal di atas wallpaper
+  yang diburamkan, ikon + nama di atas kartu, ketuk = buka, geser kartu ke atas = tutup, tombol "Hapus Semua".
+  Dibuka dari: geser ke atas pada dock, ketuk dua kali di Home (opsional), atau otomatis menggantikan layar Recents bawaan
+  (butuh layanan Aksesibilitas; Recents bawaan sempat terlihat sebentar lalu dialihkan). Sumber daftar: Aksesibilitas
+  (urutan jendela depan) atau Akses Penggunaan (cadangan). Pratinjau jendela memakai `takeScreenshot` Aksesibilitas, disimpan
+  lokal di cache, dapat dimatikan/dihapus di Pengaturan.
+  Batas Android: aplikasi launcher biasa tidak bisa menjadi penyedia Recents sistem (itu komponen milik OEM), jadi cara
+  kerjanya adalah mengalihkan, bukan menggantikan langsung.
+- **Ketuk dua kali di Home**: Kunci layar (via Aksesibilitas `GLOBAL_ACTION_LOCK_SCREEN`), Cari, atau Pengalih Aplikasi.
+  "Double tap to wake" (membangunkan layar) adalah fitur firmware perangkat, bukan launcher.
+- **Kustomisasi baru**: bentuk ikon (squircle/bulat/kotak), ukuran teks label, jumlah baris, titik halaman, sembunyikan bilah
+  status, kunci susunan Home, redupkan wallpaper, kelengkungan & kepekatan dock, nonaktifkan tarik-ke-bawah untuk pencarian,
+  serta opsi Pengalih Aplikasi (pratinjau, nama, hapus semua, hentikan proses, ukuran kartu).
+- **Perbaikan build**: `build.sh` dan workflow tidak lagi bergantung pada bit executable (`bash build.sh`).
+
 ## v1.1.0
 - **Widget**: widget bawaan (Jam Analog, Jam Digital, Tanggal, Kalender, Baterai, Pencarian) dengan pratinjau langsung
   di galeri widget, plus widget dari aplikasi lain lewat AppWidgetHost. Ukuran dapat diubah dari menu tekan-lama.

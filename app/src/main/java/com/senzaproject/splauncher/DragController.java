@@ -78,6 +78,7 @@ final class DragController {
     /** Dipanggil saat tekan-lama pada ikon/widget Home. immediate=true pada mode edit. */
     void arm(View v, boolean immediate) {
         if (state != IDLE || !(v instanceof ItemHolder)) return;
+        if (a.prefs.lockLayout()) return;
         LayoutStore.Item it = ((ItemHolder) v).getItem();
         if (it == null) return;
         int pg = a.pageIndexOf(v);

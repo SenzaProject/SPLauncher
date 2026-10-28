@@ -33,8 +33,19 @@ final class IconFactory {
     private static final ExecutorService EXEC = Executors.newFixedThreadPool(2);
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
+    private static volatile int shapeId = 0;
+    private static volatile double shapeN = 5.0;
+
+    /** Bentuk ikon: 0 squircle iOS, 1 bulat, 2 kotak membulat. */
+    static void setShape(int id) {
+        if (id == shapeId) return;
+        shapeId = id;
+        shapeN = id == 1 ? 2.0 : (id == 2 ? 10.0 : 5.0);
+        CACHE.evictAll();
+    }
+
     static String cacheKey(AppRepo.AppInfo a, int size, int style, int tint, boolean dark, String pack) {
-        return a.key + "|" + size + "|" + style + "|" + (style == Prefs.STYLE_TINTED ? tint : 0) + "|"
+        return a.key + "|s" + shapeId + "|" + size + "|" + style + "|" + (style == Prefs.STYLE_TINTED ? tint : 0) + "|"
                 + (style == Prefs.STYLE_DARK ? dark : false) + "|" + pack;
     }
 
@@ -67,7 +78,7 @@ final class IconFactory {
     static Path squircle(float size) {
         Path path = new Path();
         float half = size / 2f;
-        final double n = 5.0;
+        final double n = shapeN;
         final int steps = 96;
         for (int i = 0; i <= steps; i++) {
             double t = 2 * Math.PI * i / steps;

@@ -18,7 +18,7 @@ jobs:
         run: |
           if [ -n "$KS_B64" ]; then echo "$KS_B64" | base64 -d > sp-release.p12; fi
       - name: Build
-        run: ./build.sh
+        run: bash build.sh
       - uses: actions/upload-artifact@v4
         with:
           name: SP-Launcher-apk
