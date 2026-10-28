@@ -227,6 +227,8 @@ public class SettingsActivity extends Activity {
         head.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { showPage("about"); } });
         addCard(head);
 
+        addCard(defaultLauncherCard());
+
         LinearLayout g1 = card();
         g1.addView(navRow(R.drawable.sym_photo, 0xFF4C8DFF, "Tampilan Utama", null, go("main")));
         g1.addView(divider());
@@ -567,14 +569,19 @@ public class SettingsActivity extends Activity {
         appsBasics();
     }
 
-    /** Launcher default + pengaturan Home Screen (ditaruh di Pengaturan Lanjutan). */
-    private void appsBasics() {
+    /** Kartu status + tombol "Jadikan Launcher Default" (dipakai di halaman utama dan Pengaturan Lanjutan). */
+    private LinearLayout defaultLauncherCard() {
         LinearLayout c0 = card();
         defaultStatus = text("", 14, sub, false);
         defaultStatus.setPadding(dp(16), dp(14), dp(16), 0);
         c0.addView(defaultStatus);
         c0.addView(action("Jadikan Launcher Default", new Runnable() { @Override public void run() { requestDefault(); } }, accent));
-        page.addView(c0);
+        return c0;
+    }
+
+    /** Launcher default + pengaturan Home Screen (ditaruh di Pengaturan Lanjutan). */
+    private void appsBasics() {
+        page.addView(defaultLauncherCard());
 
         section("HOME SCREEN");
         LinearLayout c4 = card();
