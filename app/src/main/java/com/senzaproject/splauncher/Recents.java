@@ -184,11 +184,11 @@ final class Recents {
     static void saveSnapshot(Context c, String pkg, Bitmap full) {
         FileOutputStream os = null;
         try {
-            int w = 640;
+            int w = 420;
             int h = Math.max(1, Math.round(w * (full.getHeight() / (float) full.getWidth())));
             Bitmap small = Bitmap.createScaledBitmap(full, w, h, true);
             os = new FileOutputStream(snapFile(c, pkg));
-            small.compress(Bitmap.CompressFormat.JPEG, 80, os);
+            small.compress(Bitmap.CompressFormat.JPEG, 72, os);
             if (small != full) small.recycle();
         } catch (Throwable ignored) {
         } finally {

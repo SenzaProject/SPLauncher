@@ -26,7 +26,6 @@ final class LayoutStore {
         String key;                 // APP: "pkg/cls"
         String title = "Folder";    // FOLDER
         ArrayList<String> kids = new ArrayList<>();
-        int fw, fh;                 // FOLDER: ukuran panel (dp) yang diatur pengguna; 0 = otomatis
         // WIDGET
         String wkind;               // "clock_analog", "clock_digital", "date", "month", "battery", "search", atau W_EXT
         int spanW = 1, spanH = 1;   // ukuran dalam sel grid
@@ -103,8 +102,6 @@ final class LayoutStore {
                 l.add(w);
             } else if (o.getInt("t") == FOLDER) {
                 Item f = Item.folder(o.optString("n", "Folder"));
-                f.fw = Math.max(0, o.optInt("fw", 0));
-                f.fh = Math.max(0, o.optInt("fh", 0));
                 JSONArray c = o.getJSONArray("c");
                 for (int j = 0; j < c.length(); j++) f.kids.add(c.getString(j));
                 l.add(f);
@@ -128,8 +125,6 @@ final class LayoutStore {
                 if (it.wprov != null) o.put("p", it.wprov);
             } else if (it.type == FOLDER) {
                 o.put("n", it.title);
-                if (it.fw > 0) o.put("fw", it.fw);
-                if (it.fh > 0) o.put("fh", it.fh);
                 JSONArray c = new JSONArray();
                 for (String k : it.kids) c.put(k);
                 o.put("c", c);

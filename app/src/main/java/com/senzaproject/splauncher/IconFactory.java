@@ -185,13 +185,13 @@ final class IconFactory {
                 cv.save();
                 cv.clipPath(sq);
                 Paint g = new Paint(Paint.ANTI_ALIAS_FLAG);
-                g.setShader(new LinearGradient(0, 0, size, size, 0x99FFFFFF, 0x4DFFFFFF, Shader.TileMode.CLAMP));
+                g.setShader(new LinearGradient(0, 0, size, size, 0x66FFFFFF, 0x1FFFFFFF, Shader.TileMode.CLAMP));
                 cv.drawRect(0, 0, size, size, g);
                 cv.restore();
                 ColorMatrix cm = new ColorMatrix();
-                cm.setSaturation(0.9f);
+                cm.setSaturation(0.65f);
                 p.setColorFilter(new ColorMatrixColorFilter(cm));
-                p.setAlpha(238);
+                p.setAlpha(205);
                 cv.drawBitmap(base, 0, 0, p);
                 rim = 0.6f;
                 break;
