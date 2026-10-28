@@ -114,11 +114,15 @@ public class SPAccessibilityService extends AccessibilityService {
                 return;
             }
             onWindow(pkg, cls);
-        } else if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+        } else if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                || type == AccessibilityEvent.TYPE_VIEW_SCROLLED
+                || type == AccessibilityEvent.TYPE_VIEW_CLICKED
+                || type == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+            // isi aplikasi berubah (gulir, ketuk, ketik, konten baru): ambil ulang pratinjau (dibatasi + ditunda)
             if (fgEligible && pkg.equals(fgPkg) && prefs.switcherSnapshots()
-                    && SystemClock.uptimeMillis() - lastShot > 2500L) {
+                    && SystemClock.uptimeMillis() - lastShot > 2000L) {
                 main.removeCallbacks(shotRun);
-                main.postDelayed(shotRun, 600L);
+                main.postDelayed(shotRun, 450L);
             }
         }
     }
@@ -146,11 +150,15 @@ public class SPAccessibilityService extends AccessibilityService {
     }
 
     private void onWindow(String pkg, String cls) {
+        // Jendela sistem/papan ketik/dialog kecil TIDAK boleh menggantikan aplikasi di depan. Dulu menarik bilah status
+        // atau membuka keyboard membuat aplikasi dianggap "bukan aplikasi" sehingga pratinjau tidak pernah diambil.
+        if (pkg.equals("com.android.systemui")
+                || cls.startsWith("android.inputmethodservice") || cls.startsWith("android.view.")
+                || cls.startsWith("android.widget.") || cls.startsWith("android.app.AlertDialog")
+                || isImePackage(pkg)) return;
         fgPkg = pkg;
         fgEligible = false;
-        if (pkg.equals(getPackageName()) || pkg.equals("com.android.systemui")) return;
-        if (cls.startsWith("android.inputmethodservice") || cls.startsWith("android.view.")) return;
-        if (isImePackage(pkg) || isHomePackage(pkg)) return;
+        if (pkg.equals(getPackageName()) || isHomePackage(pkg)) return;
         try {
             if (getPackageManager().getLaunchIntentForPackage(pkg) == null) return;
         } catch (Throwable t) {
@@ -160,7 +168,7 @@ public class SPAccessibilityService extends AccessibilityService {
         Recents.touch(this, pkg);
         if (prefs.switcherSnapshots()) {
             main.removeCallbacks(shotRun);
-            main.postDelayed(shotRun, 1300L);
+            main.postDelayed(shotRun, 900L);
         }
     }
 

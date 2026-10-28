@@ -91,3 +91,16 @@ backup/restore susunan Home, sembunyikan aplikasi, Smart Stack, drag antar-folde
   Saat dialihkan dari Recents bawaan, Pengalih Aplikasi dipasang langsung (tanpa memudar) sehingga Home tidak berkedip.
   Pratinjau lebih segar (ambil ulang tiap 2,5 detik, sebelumnya 6 detik).
 - **Layar Nol**: latar kini opak (wallpaper diburamkan), menutupi Dock, titik halaman, dan ikon Home sehingga tidak tembus lagi di balik widget.
+
+## v1.0.2 (Beta Test)
+- **Bug Dock/overlay**: lapisan overlay kini permanen di atas Dock (elevation 40dp). Sebelumnya Dock tidak ikut redup saat folder dibuka dan bisa menimpa panel.
+- **Folder**: wallpaper, ikon Home, dan Dock di belakang panel folder kini diburamkan (RenderEffect) sehingga ikon tidak tembus jelas di balik kaca.
+  **Ukuran folder bebas**: seret pegangan di pojok kanan bawah panel; jumlah kolom menyesuaikan lebar, ukuran tersimpan per folder.
+  Tekan lama ikon folder > "Ukuran Folder: Otomatis" untuk mengembalikan.
+- **Layar Nol dapat dikustomisasi** (tombol "Ubah" atau tekan lama judul): tambah widget (bawaan atau dari aplikasi lain lewat galeri widget),
+  hapus, urutkan (panah), setengah/penuh lebar (dua widget bersebelahan), tinggi bebas (seret garis putih di bawah widget),
+  ganti/sembunyikan judul, atur peredam latar 0-90%. Judul kini putih agar terbaca di latar gelap. Tombol Kembali keluar dari mode Ubah dulu.
+- **Gaya ikon Kaca**: lebih jelas (sebelumnya terlalu pudar).
+- **Recents**: kartu bertumpuk baru (kartu tengah penuh, kartu samping mengintip ~25% dan digelapkan, judul hanya di kartu tengah).
+  Pratinjau isi aplikasi lebih andal: jendela sistem/keyboard tidak lagi membatalkan pengambilan, pemicu bertambah
+  (gulir, ketuk, ketik), resolusi lebih tinggi. Layanan Aksesibilitas menambah jenis event: setelah update, matikan lalu hidupkan lagi layanannya.

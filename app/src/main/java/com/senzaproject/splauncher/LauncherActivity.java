@@ -118,6 +118,9 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     private TopSheet sheet, pullSheet;
     /** Layar Nol (panel widget di kiri Home pertama); null bila tertutup. */
     private ZeroScreen zero;
+    private ZeroConfig zeroCfgObj;
+    /** true: widget yang dipilih di galeri ditambahkan ke Layar Nol, bukan ke halaman Home. */
+    private boolean pickForZero;
     AppSwitcher switcher;
     private final Runnable switcherRun = new Runnable() { @Override public void run() { openSwitcher(); } };
     private float dsX, dsY;
@@ -150,6 +153,9 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         dockPanel.addView(dockLayout, new LinearLayout.LayoutParams(-1, -1));
         root.addView(dockPanel, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
         overlayLayer = new FrameLayout(this);
+        // Dock/GlassLayout punya elevation 8dp dan digambar di atas sibling biasa. Lapisan overlay dinaikkan agar
+        // folder, menu, pencarian, dan Layar Nol selalu menutupi (dan meredupkan) Dock.
+        overlayLayer.setElevation(U.dpf(this, 40));
         root.addView(overlayLayer, new FrameLayout.LayoutParams(-1, -1));
         doneBtn = new GlassLayout(this, 17, 0.40f, true);
         doneBtn.setGravity(Gravity.CENTER);
@@ -588,6 +594,11 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (it.type == LayoutStore.FOLDER) {
             final IconView fv = v;
             acts.add(new Menus.Action("Ganti Nama", new Runnable() { @Override public void run() { openFolder(fv, true); } }));
+            if (it.fw > 0 || it.fh > 0) {
+                acts.add(new Menus.Action("Ukuran Folder: Otomatis", new Runnable() {
+                    @Override public void run() { it.fw = 0; it.fh = 0; store.save(); toast("Ukuran folder dikembalikan ke otomatis"); }
+                }));
+            }
             acts.add(new Menus.Action("Hapus Folder", new Runnable() {
                 @Override public void run() { store.removeItem(it); store.save(); rebuildAll(); }
             }, true));
@@ -729,6 +740,33 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         showAppPanel(title, apps, null, anchor, false);
     }
 
+    // ------------------------------------------------------------------ latar buram saat folder terbuka
+
+    private android.animation.ValueAnimator bgBlurAnim;
+    private float bgBlurNow;
+
+    /** Buramkan wallpaper, ikon Home, dan Dock di belakang panel (seperti iOS) agar ikon tidak tembus jelas di balik kaca. */
+    private void animateBgBlur(float to) {
+        if (bgBlurAnim != null) bgBlurAnim.cancel();
+        if (!animOn()) { applyBgBlur(to); return; }
+        bgBlurAnim = android.animation.ValueAnimator.ofFloat(bgBlurNow, to);
+        bgBlurAnim.setDuration(240);
+        bgBlurAnim.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+            @Override public void onAnimationUpdate(android.animation.ValueAnimator a) { applyBgBlur((Float) a.getAnimatedValue()); }
+        });
+        bgBlurAnim.start();
+    }
+
+    private void applyBgBlur(float t) {
+        bgBlurNow = t;
+        android.graphics.RenderEffect e = t <= 0.02f ? null
+                : android.graphics.RenderEffect.createBlurEffect(26f * t, 26f * t, android.graphics.Shader.TileMode.CLAMP);
+        wallView.setRenderEffect(e);
+        workspace.setRenderEffect(e);
+        dockPanel.setRenderEffect(e);
+        dots.setRenderEffect(e);
+    }
+
     private void showAppPanel(String title, List<AppRepo.AppInfo> apps, final LayoutStore.Item folder, View anchor,
                               boolean focusTitle) {
         closePanel(false);
@@ -772,53 +810,141 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         tv.setGravity(Gravity.CENTER);
         box.addView(tv, new LinearLayout.LayoutParams(-1, U.dp(this, 44)));
 
-        int boxW = Math.min(W - insLeft - insRight - U.dp(this, 40), U.dp(this, 420));
-        int fcols = 4;
-        int cw = (boxW - 2 * pad) / fcols;
-        int fi = Math.min(U.dp(this, 58), Math.round(cw * 0.74f));
-        int ch = fi + U.dp(this, 30);
-        ScrollView sv = new ScrollView(this);
-        sv.setVerticalScrollBarEnabled(false);
-        LinearLayout grid = new LinearLayout(this);
-        grid.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout line = null;
-        for (int i = 0; i < apps.size(); i++) {
-            if (i % fcols == 0) {
-                line = new LinearLayout(this);
-                line.setOrientation(LinearLayout.HORIZONTAL);
-                grid.addView(line, new LinearLayout.LayoutParams(-1, ch));
-            }
-            final AppRepo.AppInfo a = apps.get(i);
-            IconView iv = new IconView(this);
-            iv.bindApp(a, prefs, fi, true, dark);
-            iv.setLabelColor(fg, dark);
-            iv.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) { closePanel(false); repo.launch(a, v); }
-            });
-            iv.setOnLongClickListener(new View.OnLongClickListener() {
-                @Override public boolean onLongClick(View v) {
-                    haptic(v);
-                    List<Menus.Action> acts = new ArrayList<>();
-                    appMenuItems(acts, a, null, folder);
-                    showMenu(rectOf(v), acts);
-                    return true;
-                }
-            });
-            line.addView(iv, new LinearLayout.LayoutParams(cw, ch));
-        }
-        sv.addView(grid, new ScrollView.LayoutParams(-1, -2));
-        int rowsN = (apps.size() + fcols - 1) / fcols;
-        int maxH = Math.round(H * 0.58f);
-        int contentH = Math.min(maxH, Math.max(1, rowsN) * ch);
-        box.addView(sv, new LinearLayout.LayoutParams(-1, contentH));
+        // ---- ukuran panel: otomatis, atau bebas diatur pengguna dengan menyeret pegangan di pojok kanan bawah
+        final int autoW = Math.min(W - insLeft - insRight - U.dp(this, 40), U.dp(this, 420));
+        final int minW = U.dp(this, 200), maxW = Math.max(minW, W - insLeft - insRight - U.dp(this, 16));
+        final int minH = U.dp(this, 170), maxH = Math.round(H * 0.9f);
+        final int titleH = U.dp(this, 44), gripH = U.dp(this, 30);
+        final int[] size = new int[]{autoW, 0};          // lebar, tinggi total (0 = otomatis)
+        if (folder != null && folder.fw > 0) size[0] = U.clamp(U.dp(this, folder.fw), minW, maxW);
+        if (folder != null && folder.fh > 0) size[1] = U.clamp(U.dp(this, folder.fh), minH, maxH);
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(boxW, -2, Gravity.CENTER);
+        final ScrollView sv = new ScrollView(this);
+        sv.setVerticalScrollBarEnabled(false);
+        final LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        sv.addView(grid, new ScrollView.LayoutParams(-1, -2));
+        final LinearLayout.LayoutParams svLp = new LinearLayout.LayoutParams(-1, 10);
+        box.addView(sv, svLp);
+
+        final FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size[0], -2, Gravity.CENTER);
         lp.bottomMargin = U.dp(this, 40);
+
+        final List<AppRepo.AppInfo> panelApps = apps;
+        final int panelFg = fg;
+        final int[] lastCols = new int[]{-1};
+        final Runnable relayout = new Runnable() {
+            @Override public void run() {
+                int bw = size[0];
+                int fcols = U.clamp((bw - 2 * pad) / U.dp(LauncherActivity.this, 76), 2, 7);
+                int cw = (bw - 2 * pad) / fcols;
+                int fi = Math.min(U.dp(LauncherActivity.this, 58), Math.round(cw * 0.74f));
+                int ch = fi + U.dp(LauncherActivity.this, 30);
+                if (fcols != lastCols[0]) {
+                    lastCols[0] = fcols;
+                    grid.removeAllViews();
+                    LinearLayout line = null;
+                    for (int i = 0; i < panelApps.size(); i++) {
+                        if (i % fcols == 0) {
+                            line = new LinearLayout(LauncherActivity.this);
+                            line.setOrientation(LinearLayout.HORIZONTAL);
+                            grid.addView(line, new LinearLayout.LayoutParams(-1, ch));
+                        }
+                        final AppRepo.AppInfo a = panelApps.get(i);
+                        IconView iv = new IconView(LauncherActivity.this);
+                        iv.bindApp(a, prefs, fi, true, dark);
+                        iv.setLabelColor(panelFg, dark);
+                        iv.setOnClickListener(new View.OnClickListener() {
+                            @Override public void onClick(View v) { closePanel(false); repo.launch(a, v); }
+                        });
+                        iv.setOnLongClickListener(new View.OnLongClickListener() {
+                            @Override public boolean onLongClick(View v) {
+                                haptic(v);
+                                List<Menus.Action> acts = new ArrayList<>();
+                                appMenuItems(acts, a, null, folder);
+                                showMenu(rectOf(v), acts);
+                                return true;
+                            }
+                        });
+                        line.addView(iv, new LinearLayout.LayoutParams(cw, ch));
+                    }
+                } else {
+                    // jumlah kolom sama: cukup ubah lebar sel
+                    for (int r = 0; r < grid.getChildCount(); r++) {
+                        View row = grid.getChildAt(r);
+                        row.setLayoutParams(new LinearLayout.LayoutParams(-1, ch));
+                        if (row instanceof LinearLayout) {
+                            LinearLayout rl = (LinearLayout) row;
+                            for (int k = 0; k < rl.getChildCount(); k++) rl.getChildAt(k).setLayoutParams(new LinearLayout.LayoutParams(cw, ch));
+                        }
+                    }
+                }
+                int rowsN = (panelApps.size() + fcols - 1) / fcols;
+                int contentH = size[1] > 0 ? Math.max(U.dp(LauncherActivity.this, 60), size[1] - titleH - 2 * pad - gripH)
+                        : Math.min(Math.round(H * 0.58f), Math.max(1, rowsN) * ch);
+                svLp.height = contentH;
+                lp.width = bw;
+                sv.setLayoutParams(svLp);
+                box.setLayoutParams(lp);
+            }
+        };
+        relayout.run();
+
+        // pegangan pojok kanan bawah: seret untuk mengubah ukuran sesuka hati (tersimpan per folder)
+        FrameLayout gripRow = new FrameLayout(this);
+        View grip = new View(this) {
+            private final android.graphics.Paint gp = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            @Override protected void onDraw(Canvas c) {
+                gp.setColor(panelFg);
+                gp.setAlpha(150);
+                gp.setStrokeWidth(U.dpf(LauncherActivity.this, 2.2f));
+                gp.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                float w = getWidth(), h = getHeight(), m = U.dpf(LauncherActivity.this, 7);
+                c.drawLine(w - m, h * 0.45f, w * 0.45f, h - m, gp);
+                c.drawLine(w - m, h * 0.72f, w * 0.72f, h - m, gp);
+            }
+        };
+        grip.setContentDescription("Ubah ukuran folder");
+        grip.setOnTouchListener(new View.OnTouchListener() {
+            private float sx, sy;
+            private int sw0, sh0;
+            @Override public boolean onTouch(View v, MotionEvent ev) {
+                switch (ev.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        sx = ev.getRawX(); sy = ev.getRawY();
+                        sw0 = box.getWidth();
+                        sh0 = size[1] > 0 ? size[1] : box.getHeight();
+                        if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        // kotak berada di tengah: kali 2 agar pojok mengikuti jari
+                        size[0] = U.clamp(Math.round(sw0 + 2 * (ev.getRawX() - sx)), minW, maxW);
+                        size[1] = U.clamp(Math.round(sh0 + 2 * (ev.getRawY() - sy)), minH, maxH);
+                        relayout.run();
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (folder != null) {
+                            float dn = getResources().getDisplayMetrics().density;
+                            folder.fw = Math.round(size[0] / dn);
+                            folder.fh = Math.round(size[1] / dn);
+                            store.save();
+                        }
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
+        gripRow.addView(grip, new FrameLayout.LayoutParams(U.dp(this, 30), U.dp(this, 30), Gravity.END | Gravity.BOTTOM));
+        box.addView(gripRow, new LinearLayout.LayoutParams(-1, gripH));
+
         dim.addView(box, lp);
         overlayLayer.addView(dim, new FrameLayout.LayoutParams(-1, -1));
         panelDim = dim;
         panelBox = box;
         panelFolder = folder;
+        animateBgBlur(1f);
 
         if (animOn()) {
             final RectF ar = rectOf(anchor);
@@ -856,6 +982,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             if (imm != null) imm.hideSoftInputFromWindow(panelTitle.getWindowToken(), 0);
         }
         panelDim = null; panelBox = null; panelFolder = null; panelTitle = null;
+        animateBgBlur(0f);
         dismissMenu();
         if (animate && animOn()) {
             dim.animate().alpha(0f).setDuration(160).withEndAction(new Runnable() {
@@ -975,10 +1102,23 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     // ------------------------------------------------------------------ Layar Nol
 
     private final ZeroScreen.Host zeroHost = new ZeroScreen.Host() {
-        @Override public void onZeroClosed(ZeroScreen z) { if (zero == z) removeZero(); else { z.release(); overlayLayer.removeView(z); if (zero == null) overlayLayer.setElevation(0f); } }
+        @Override public void onZeroClosed(ZeroScreen z) { if (zero == z) removeZero(); else { z.release(); overlayLayer.removeView(z); } }
         @Override public boolean reduceMotion() { return prefs.reduceMotion(); }
         @Override public void onZeroSearch() { removeZero(); openSearch(); }
+        @Override public View zeroExternalWidget(LayoutStore.Item it, int wDp, int hDp) { return externalView(it, wDp, hDp); }
+        @Override public void onZeroAddWidget() { openWidgetPickerInternal(); pickForZero = true; }
+        @Override public void onZeroWidgetRemoved(ZeroConfig.Entry e) {
+            if (e.isExt() && e.wid >= 0) {
+                try { widgetHost.deleteAppWidgetId(e.wid); } catch (Throwable ignored) { }
+                hostViews.remove(e.wid);
+            }
+        }
     };
+
+    private ZeroConfig zeroCfg() {
+        if (zeroCfgObj == null) zeroCfgObj = new ZeroConfig(this);
+        return zeroCfgObj;
+    }
 
     private void removeZero() {
         ZeroScreen z = zero;
@@ -986,16 +1126,12 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (z == null) return;
         z.release();
         overlayLayer.removeView(z);
-        overlayLayer.setElevation(0f);
     }
 
     @Override public void onZeroBegin() {
         if (zero != null) removeZero();
         dismissMenu();
-        // Dock (GlassLayout) punya elevation 8dp sehingga digambar di atas sibling biasa. Naikkan lapisan overlay
-        // agar Layar Nol menutupi Dock, titik halaman, dan ikon Home.
-        overlayLayer.setElevation(U.dpf(this, 40));
-        zero = new ZeroScreen(this, prefs, dark, insTop, insBottom, zeroHost);
+        zero = new ZeroScreen(this, prefs, dark, insTop, insBottom, zeroCfg(), zeroHost);
         overlayLayer.addView(zero, new FrameLayout.LayoutParams(-1, -1));
         zero.setProgress(0f);
     }
@@ -1041,7 +1177,10 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         return new WidgetCell(this, it, content, this, widgetInsetX(), widgetInsetY());
     }
 
-    private View externalView(LayoutStore.Item it) {
+    private View externalView(LayoutStore.Item it) { return externalView(it, -1, -1); }
+
+    /** wDp/hDp > 0: ukuran sebenarnya (dp), dipakai Layar Nol yang ukurannya bebas. */
+    private View externalView(LayoutStore.Item it, int wDp, int hDp) {
         AppWidgetProviderInfo info = null;
         try { info = awm.getAppWidgetInfo(it.wid); } catch (Throwable ignored) { }
         if (info == null) {
@@ -1065,7 +1204,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         ExtWidgets.Metrics m = metrics();
         float d = getResources().getDisplayMetrics().density;
         ArrayList<SizeF> sizes = new ArrayList<>();
-        sizes.add(new SizeF(m.widthPx(it.spanW) / d, m.heightPx(it.spanH) / d));
+        if (wDp > 0 && hDp > 0) sizes.add(new SizeF(wDp, hDp));
+        else sizes.add(new SizeF(m.widthPx(it.spanW) / d, m.heightPx(it.spanH) / d));
         try { hv.updateAppWidgetSize(new Bundle(), sizes); } catch (Throwable ignored) { }
         return hv;
     }
@@ -1176,6 +1316,11 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     // ---- galeri widget
 
     void openWidgetPicker() {
+        pickForZero = false;
+        openWidgetPickerInternal();
+    }
+
+    private void openWidgetPickerInternal() {
         if (picker != null) return;
         dismissMenu();
         closePanel(false);
@@ -1189,6 +1334,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
 
     @Override public void onPickerClosed(WidgetPicker p) {
         if (picker == p) picker = null;
+        if (pendingId < 0 && pendingInfo == null) pickForZero = false;
         p.release();
         overlayLayer.removeView(p);
         if (edit && picker == null) {
@@ -1198,6 +1344,13 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     }
 
     @Override public void onPickBuiltin(BuiltinWidgets.Spec s) {
+        if (pickForZero) {
+            pickForZero = false;
+            zeroCfg().addBuiltin(s.kind, s.sw == BuiltinWidgets.FULL ? 4 : s.sw, s.sh);
+            if (zero != null) zero.refresh();
+            toast("Widget ditambahkan ke Layar Nol");
+            return;
+        }
         placeWidget(LayoutStore.Item.widget(s.kind, s.widthFor(cols), s.heightFor(rows)));
     }
 
@@ -1257,6 +1410,18 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         }
         if (info == null || pendingId < 0) { cancelPending(); return; }
         int[] span = ExtWidgets.spanFor(info, metrics());
+        if (pickForZero) {
+            pickForZero = false;
+            ExtWidgets.Metrics zm = metrics();
+            float dn = getResources().getDisplayMetrics().density;
+            zeroCfg().addExternal(pendingId, info.provider.flattenToString(), span[0] * 2 <= zm.cols, span[1],
+                    Math.round(zm.heightPx(span[1]) / dn));
+            pendingId = -1;
+            pendingInfo = null;
+            if (zero != null) zero.refresh();
+            toast("Widget ditambahkan ke Layar Nol");
+            return;
+        }
         LayoutStore.Item w = LayoutStore.Item.external(pendingId, info.provider.flattenToString(), span[0], span[1]);
         pendingId = -1;
         pendingInfo = null;
@@ -1282,6 +1447,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
                 if (req == REQ_BIND) afterBind(); else finishAdd();
             } else {
                 cancelPending();
+                pickForZero = false;
             }
             return;
         }

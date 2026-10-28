@@ -81,7 +81,7 @@ final class AppSwitcher extends FrameLayout {
         cardH = Math.max(U.dp(a, 160), ch);
         radius = U.dp(a, 28);
         stacked = prefs.switcherStyle() == 1;
-        overlap = stacked ? Math.round(cardW * 0.40f) : 0;
+        overlap = stacked ? Math.round(cardW * 0.45f) : 0;
 
         hsv = new HorizontalScrollView(act);
         hsv.setHorizontalScrollBarEnabled(false);
@@ -223,7 +223,20 @@ final class AppSwitcher extends FrameLayout {
 
     // ------------------------------------------------------------------ tumpukan kartu
 
-    /** Atur skala dan urutan gambar tiap kartu menurut jaraknya dari tengah layar. */
+    /**
+     * Jarak pusat kartu dari tengah (dalam lebar kartu) dan skala menurut jarak |d| dari kartu tengah (0..4).
+     * Kartu terdekat mengintip ~25% di tiap sisi, kartu berikutnya menumpuk rapat di belakangnya.
+     */
+    private static final float[] STACK_X = {0f, 0.30f, 0.44f, 0.52f, 0.56f};
+    private static final float[] STACK_S = {1f, 0.90f, 0.82f, 0.76f, 0.72f};
+
+    private static float table(float[] t, float a) {
+        a = U.clampf(a, 0f, t.length - 1f);
+        int i = Math.min(t.length - 2, (int) a);
+        return t[i] + (t[i + 1] - t[i]) * (a - i);
+    }
+
+    /** Atur posisi, skala, peredam, dan judul tiap kartu menurut jaraknya dari tengah layar. */
     private void updateStack() {
         if (!stacked) return;
         int n = strip.getChildCount();
@@ -231,23 +244,26 @@ final class AppSwitcher extends FrameLayout {
         float pitch = Math.max(1f, cardW - overlap);
         for (int i = 0; i < n; i++) {
             View sl = strip.getChildAt(i);
-            float d = (sl.getLeft() + sl.getWidth() / 2f - vc) / pitch;   // 0 = di tengah
-            float ad = Math.min(Math.abs(d), 3f);
-            float sc = 1f - 0.06f * ad;
-            // pivot di tengah-atas: judul (ikon + nama) semua sejajar di satu baris, kartu mengecil ke bawah
+            float d = (sl.getLeft() + sl.getWidth() / 2f - vc) / pitch;   // 0 = di tengah, tanda = sisi
+            float ad = Math.abs(d);
+            float sc = table(STACK_S, ad);
+            float x = Math.signum(d) * table(STACK_X, ad) * cardW;
             sl.setPivotX(sl.getWidth() / 2f);
-            sl.setPivotY(0f);
+            sl.setPivotY(sl.getHeight() / 2f);
+            sl.setTranslationX(x - d * pitch);
             sl.setScaleX(sc);
             sl.setScaleY(sc);
-            // kartu yang tidak di tengah digelapkan agar kartu utama menonjol
+            // kartu terdekat dari tengah digambar paling depan
+            sl.setTranslationZ(U.dpf(a, 60) - Math.min(ad, 5f) * U.dpf(a, 10));
             if (sl instanceof LinearLayout && ((LinearLayout) sl).getChildCount() > 1) {
-                View card = ((LinearLayout) sl).getChildAt(1);
+                LinearLayout ll = (LinearLayout) sl;
+                // hanya kartu tengah yang menampilkan judul (ikon + nama): tidak ada teks bertumpuk
+                ll.getChildAt(0).setAlpha(U.clampf(1f - ad * 1.8f, 0f, 1f));
+                View card = ll.getChildAt(1);
                 if (card instanceof FrameLayout && ((FrameLayout) card).getChildCount() > 2) {
-                    ((FrameLayout) card).getChildAt(2).setAlpha(Math.min(0.5f, ad * 0.28f));
+                    ((FrameLayout) card).getChildAt(2).setAlpha(Math.min(0.55f, ad * 0.30f));
                 }
             }
-            // kartu terdekat dari tengah digambar paling depan
-            sl.setTranslationZ(U.dpf(a, 40) - ad * U.dpf(a, 10));
         }
     }
 
