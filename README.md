@@ -24,6 +24,10 @@ Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika m
 - **Tata Letak Widget**: widget baru ditaruh di atas (default) atau bawah halaman.
 - **Tema Jadwal**: mode gelap otomatis pada jam yang diatur. **Folder Transparan** dapat dimatikan.
 
+## v1.0.2
+- **Perbaikan warna ikon pucat/transparan** (terlihat di App Library, folder, Layar Nol): `IconView` memakai satu `Paint` untuk placeholder
+  (alpha 20%), badge, dan bitmap ikon, sehingga alpha sisa ikut menggambar ikon. Kini bitmap memakai `bmpPaint` terpisah.
+
 ## v1.0.1 (perbaikan tahap 1-6, belum diuji di perangkat)
 - **Animasi**: perpindahan/resize ikon & widget kini dianimasikan (FLIP di `LauncherActivity.captureFlip/playFlip`), folder menutup
   dengan mengecil ke ikon asal, Laci/Pencarian punya animasi keluar, Recents menutup celah antar kartu dengan halus, label kartu

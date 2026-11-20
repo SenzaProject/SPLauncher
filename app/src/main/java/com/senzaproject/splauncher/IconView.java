@@ -35,6 +35,8 @@ final class IconView extends View implements ItemHolder {
     private final TextPaint tp = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint badgeTp = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    /** Khusus bitmap ikon: warnanya tidak pernah diubah, agar alpha placeholder/badge tidak bocor ke ikon (ikon tampak pucat). */
+    private final Paint bmpPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final RectF rf = new RectF();
     private final float gap, badgeR;
     private Prefs prefs;
@@ -206,10 +208,10 @@ final class IconView extends View implements ItemHolder {
                 float x = left + pad + (i % 3) * (ms + gp);
                 float y = top + pad + (i / 3) * (ms + gp);
                 rf.set(x, y, x + ms, y + ms);
-                c.drawBitmap(b, null, rf, paint);
+                c.drawBitmap(b, null, rf, bmpPaint);
             }
         } else if (icon != null) {
-            c.drawBitmap(icon, left, top, paint);
+            c.drawBitmap(icon, left, top, bmpPaint);
         } else {
             paint.setColor(0x33FFFFFF);
             rf.set(left, top, left + iconSize, top + iconSize);
