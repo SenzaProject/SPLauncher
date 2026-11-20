@@ -539,9 +539,13 @@ public class SettingsActivity extends Activity {
     private void pageDisplay() {
         section("LAYAR UTAMA");
         LinearLayout c2 = card();
-        c2.addView(segmented("Kolom Ikon", "cols", new String[]{"4", "5", "6"}, new int[]{4, 5, 6}, prefs.cols()));
+        c2.addView(segmented("Kolom Ikon", "cols", new String[]{"3", "4", "5", "6", "7"}, new int[]{3, 4, 5, 6, 7}, prefs.cols()));
         c2.addView(divider());
-        c2.addView(segmented("Jumlah Baris", "rowsPref", new String[]{"Otomatis", "5", "6", "7"}, new int[]{0, 5, 6, 7}, prefs.rowsPref()));
+        c2.addView(segmented("Jumlah Baris", "rowsPref", new String[]{"Otomatis", "4", "5", "6", "7", "8"}, new int[]{0, 4, 5, 6, 7, 8}, prefs.rowsPref()));
+        c2.addView(divider());
+        c2.addView(seek("Jarak Horizontal Ikon", "hGap", 60, 100, prefs.hGap(), "%"));
+        c2.addView(divider());
+        c2.addView(seek("Jarak Vertikal Ikon", "vGap", 60, 100, prefs.vGap(), "%"));
         c2.addView(divider());
         c2.addView(toggle("Titik Halaman", "pageDots", prefs.pageDots()));
         c2.addView(divider());
@@ -553,6 +557,10 @@ public class SettingsActivity extends Activity {
         section("DOCK");
         LinearLayout c3 = card();
         c3.addView(toggle("Tampilkan Dock", "dock", prefs.showDock()));
+        c3.addView(divider());
+        c3.addView(seek("Ukuran Dock", "dockScale", 80, 130, prefs.dockScale(), "%"));
+        c3.addView(divider());
+        c3.addView(seek("Posisi Dock (naik dari bawah)", "dockLift", 0, 40, prefs.dockLift(), " dp"));
         c3.addView(divider());
         c3.addView(seek("Kelengkungan Dock", "dockRadius", 14, 40, prefs.dockRadius(), " dp"));
         c3.addView(divider());
@@ -618,7 +626,7 @@ public class SettingsActivity extends Activity {
         c9.addView(divider());
         c9.addView(toggle("Tombol Hapus Semua", "switcherClearAll", prefs.switcherClearAll()));
         c9.addView(divider());
-        c9.addView(toggle("Hentikan Aplikasi Saat Digeser Tutup", "switcherKill", prefs.switcherKill()));
+        c9.addView(toggle("Coba Hentikan Proses Saat Digeser Tutup", "switcherKill", prefs.switcherKill()));
         c9.addView(divider());
         c9.addView(segmented("Gaya Kartu", "switcherStyle", new String[]{"Berjajar", "Tumpukan"}, new int[]{0, 1}, prefs.switcherStyle()));
         c9.addView(divider());

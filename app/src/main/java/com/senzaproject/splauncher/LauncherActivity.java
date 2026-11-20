@@ -95,6 +95,9 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     private View menuScrim;
     private FrameLayout panelDim;
     private GlassLayout panelBox;
+    private LinearLayout editBar;
+    private EditPanel editPanel;
+    private RectF panelAnchor;
     private LayoutStore.Item panelFolder;
     private EditText panelTitle;
     private SearchOverlay search;
@@ -177,6 +180,15 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         addBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { openWidgetPicker(); } });
         addBtn.setVisibility(View.GONE);
         root.addView(addBtn, new FrameLayout.LayoutParams(U.dp(this, 34), U.dp(this, 34), Gravity.TOP | Gravity.START));
+        editBar = new LinearLayout(this);
+        editBar.setOrientation(LinearLayout.HORIZONTAL);
+        editBar.addView(pill("Sesuaikan", new View.OnClickListener() { @Override public void onClick(View v) { toggleEditPanel(); } }),
+                new LinearLayout.LayoutParams(-2, U.dp(this, 34)));
+        LinearLayout.LayoutParams pgp = new LinearLayout.LayoutParams(-2, U.dp(this, 34));
+        pgp.setMarginStart(U.dp(this, 8));
+        editBar.addView(pill("Halaman", new View.OnClickListener() { @Override public void onClick(View v) { showPageMenu(v); } }), pgp);
+        editBar.setVisibility(View.GONE);
+        root.addView(editBar, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
         dragLayer = new FrameLayout(this);
         dragLayer.setClipChildren(false);
         root.addView(dragLayer, new FrameLayout.LayoutParams(-1, -1));
@@ -236,6 +248,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     @Override protected void onDestroy() {
         super.onDestroy();
         hostViews.clear();
+        main.removeCallbacksAndMessages(null);
+        if (switcher != null) { AppSwitcher sw = switcher; switcher = null; sw.close(false, new Runnable() { @Override public void run() { } }); }
         try { repo.la.unregisterCallback(pkgCallback); } catch (Throwable ignored) { }
         exec.shutdownNow();
     }
@@ -268,7 +282,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             boolean wantSwitcher = Recents.consumeOpenRequest();
             dismissMenu();
             closePanel(false);
-            closeSearch();
+            closeSearchNow();
             removeZero();
             if (picker != null) picker.dismiss(false);
             if (sheet != null) removeSheet(sheet);
@@ -346,8 +360,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         iconSize = U.clamp(iconSize, U.dp(this, 28), cellW - U.dp(this, 6));
         dockCap = cols;
         boolean showDock = prefs.showDock();
-        dockH = showDock ? iconSize + U.dp(this, 26) : 0;
-        dockBottom = Math.max(insBottom, U.dp(this, 8)) + U.dp(this, 6);
+        dockH = showDock ? Math.round((iconSize + U.dp(this, 26)) * prefs.dockScale() / 100f) : 0;
+        dockBottom = Math.max(insBottom, U.dp(this, 8)) + U.dp(this, 6) + U.dp(this, prefs.dockLift());
         int dotsH = U.dp(this, 26);
         int topPad = insTop + U.dp(this, 10);
         int reserved = (showDock ? dockH + dockBottom : insBottom) + dotsH + U.dp(this, 8);
@@ -357,15 +371,89 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         rows = U.clamp((int) (availH / nat), land ? 2 : 4, 8);
         if (prefs.rowsPref() > 0) rows = prefs.rowsPref();
         cellH = availH / rows;
+        // jarak horizontal/vertikal: 100% = sel memenuhi ruang; lebih kecil = ikon lebih rapat (grid tetap di tengah/atas)
+        if (prefs.hGap() < 100) cellW = Math.max(iconSize + U.dp(this, 6), Math.round(cellW * prefs.hGap() / 100f));
+        if (prefs.vGap() < 100) cellH = Math.max(Math.round(nat), Math.round(cellH * prefs.vGap() / 100f));
         pageCap = cols * rows;
     }
 
     private int padL() { return insLeft + U.dp(this, 6) + (root.getWidth() - insLeft - insRight - 2 * U.dp(this, 6) - cellW * cols) / 2; }
     private int padT() { return insTop + U.dp(this, 10); }
 
+    // ---- animasi perpindahan/resize (FLIP): posisi lama tiap item dicatat sebelum rebuild, lalu dianimasikan ke posisi baru
+    private final java.util.IdentityHashMap<LayoutStore.Item, float[]> flipOld = new java.util.IdentityHashMap<>();
+    private int flipW = -1;
+    /** Item yang baru dijatuhkan (proxy sudah beranimasi ke tujuan): tidak ikut dianimasikan lagi. */
+    LayoutStore.Item flipSkip;
+
+    private boolean flipPending;
+
+    private void captureFlip(int w) {
+        if (flipPending) return;   // rebuild beruntun: pertahankan posisi lama yang sudah tercatat
+        flipOld.clear();
+        flipW = w;
+        for (int i = 0; i < workspace.getChildCount(); i++) {
+            View p = workspace.getChildAt(i);
+            if (!(p instanceof CellLayout)) continue;
+            CellLayout cl = (CellLayout) p;
+            for (int k = 0; k < cl.getChildCount(); k++) {
+                View v = cl.getChildAt(k);
+                if (!(v instanceof ItemHolder) || v.getWidth() <= 0) continue;
+                LayoutStore.Item it = ((ItemHolder) v).getItem();
+                if (it == null) continue;
+                flipOld.put(it, new float[]{i * (float) w + v.getLeft() + v.getTranslationX(),
+                        v.getTop() + v.getTranslationY(), v.getWidth(), v.getHeight()});
+            }
+        }
+    }
+
+    private void playFlip(final int w) {
+        if (flipOld.isEmpty() || prefs.reduceMotion() || w != flipW) { flipOld.clear(); flipSkip = null; return; }
+        flipPending = true;
+        root.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override public boolean onPreDraw() {
+                root.getViewTreeObserver().removeOnPreDrawListener(this);
+                flipPending = false;
+                for (int i = 0; i < workspace.getChildCount(); i++) {
+                    View p = workspace.getChildAt(i);
+                    if (!(p instanceof CellLayout)) continue;
+                    CellLayout cl = (CellLayout) p;
+                    for (int k = 0; k < cl.getChildCount(); k++) {
+                        View v = cl.getChildAt(k);
+                        if (!(v instanceof ItemHolder)) continue;
+                        LayoutStore.Item it = ((ItemHolder) v).getItem();
+                        float[] o = it == null || it == flipSkip ? null : flipOld.get(it);
+                        if (o == null || v.getWidth() <= 0) continue;
+                        float dx = o[0] - (i * (float) w + v.getLeft()), dy = o[1] - v.getTop();
+                        boolean resized = Math.abs(o[2] - v.getWidth()) > 2 || Math.abs(o[3] - v.getHeight()) > 2;
+                        if ((Math.abs(dx) < 2 && Math.abs(dy) < 2 && !resized) || Math.abs(dx) > w * 0.9f) continue;
+                        v.animate().cancel();
+                        v.setTranslationX(dx);
+                        v.setTranslationY(dy);
+                        if (resized && v instanceof WidgetCell) {
+                            v.setPivotX(0f); v.setPivotY(0f);
+                            v.setScaleX(o[2] / v.getWidth());
+                            v.setScaleY(o[3] / v.getHeight());
+                        }
+                        final View fv = v;
+                        v.animate().translationX(0f).translationY(0f).scaleX(1f).scaleY(1f)
+                                .setDuration(300).setInterpolator(new DecelerateInterpolator(1.8f))
+                                .withEndAction(new Runnable() { @Override public void run() {
+                                    fv.setPivotX(fv.getWidth() / 2f); fv.setPivotY(fv.getHeight() / 2f);
+                                } }).start();
+                    }
+                }
+                flipOld.clear();
+                flipSkip = null;
+                return true;
+            }
+        });
+    }
+
     void rebuildAll() {
         int w = root.getWidth(), h = root.getHeight();
         if (w <= 0 || h <= 0) return;
+        captureFlip(w);
         lastSig = prefs.signature(this);
         computeMetrics(w, h);
         IconFactory.setShape(prefs.iconShape());
@@ -381,6 +469,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         library = new LibraryView(this);
         library.rebuild(repo.all(), prefs, dark, insTop, insBottom, w, this);
         workspace.addView(library);
+        playFlip(w);
         workspace.setHomeCount(store.pages.size());
         workspace.setZeroEnabled(prefs.zeroScreen());
         if (zero != null) removeZero();
@@ -416,6 +505,9 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         an.leftMargin = insLeft + U.dp(this, 16);
         addBtn.setLayoutParams(an);
         addBtn.setGlass(17, 0.40f, true);
+        FrameLayout.LayoutParams eb = (FrameLayout.LayoutParams) editBar.getLayoutParams();
+        eb.topMargin = insTop + U.dp(this, 8);
+        editBar.setLayoutParams(eb);
 
         onScrollFraction(workspace.getScrollX() / (float) Math.max(1, w));
         if (edit) applyEdit(true);
@@ -548,6 +640,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     private void applyEdit(boolean on) {
         doneBtn.setVisibility(on && picker == null ? View.VISIBLE : View.GONE);
         addBtn.setVisibility(on && picker == null ? View.VISIBLE : View.GONE);
+        editBar.setVisibility(on && picker == null ? View.VISIBLE : View.GONE);
+        if (!on) hideEditPanel(false);
         workspace.setPullEnabled(!on);
         workspace.setLongPressEnabled(!on);
         for (int i = 0; i < workspace.getChildCount(); i++) {
@@ -555,6 +649,82 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             if (p instanceof CellLayout) setEditOn((CellLayout) p, on);
         }
         setEditOn(dockLayout, on);
+    }
+
+    private GlassLayout pill(String text, View.OnClickListener l) {
+        GlassLayout g = new GlassLayout(this, 17, 0.40f, true);
+        g.setGravity(Gravity.CENTER);
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextColor(0xFFFFFFFF);
+        t.setTextSize(14f);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        t.setPadding(U.dp(this, 14), 0, U.dp(this, 14), 0);
+        t.setGravity(Gravity.CENTER);
+        g.addView(t, new LinearLayout.LayoutParams(-2, -1));
+        g.setOnClickListener(l);
+        return g;
+    }
+
+    /** Panel slider yang langsung mengubah Home di belakangnya (ukuran ikon, kolom, baris, jarak, Dock). */
+    private void toggleEditPanel() {
+        if (editPanel != null) { hideEditPanel(true); return; }
+        Runnable change = new Runnable() {
+            @Override public void run() { main.removeCallbacks(rebuildRun); main.postDelayed(rebuildRun, 50); }
+        };
+        Runnable reset = new Runnable() {
+            @Override public void run() {
+                prefs.put("iconScale", 100); prefs.put("cols", 4); prefs.put("rowsPref", 0);
+                prefs.put("hGap", 100); prefs.put("vGap", 100); prefs.put("dockScale", 100); prefs.put("dockLift", 0);
+                hideEditPanel(false);
+                rebuildAll();
+            }
+        };
+        editPanel = new EditPanel(this, prefs, dark, rows, change, reset);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, Math.round(root.getHeight() * 0.40f), Gravity.BOTTOM);
+        lp.leftMargin = insLeft + U.dp(this, 12);
+        lp.rightMargin = insRight + U.dp(this, 12);
+        lp.bottomMargin = insBottom + U.dp(this, 12);
+        overlayLayer.addView(editPanel, lp);
+        if (animOn()) {
+            editPanel.setAlpha(0f);
+            editPanel.setTranslationY(U.dpf(this, 40));
+            editPanel.animate().alpha(1f).translationY(0f).setDuration(240).setInterpolator(new DecelerateInterpolator(1.6f)).start();
+        }
+    }
+
+    private void hideEditPanel(boolean animate) {
+        if (editPanel == null) return;
+        final EditPanel p = editPanel;
+        editPanel = null;
+        if (animate && animOn()) {
+            p.animate().alpha(0f).translationY(U.dpf(this, 40)).setDuration(180)
+                    .withEndAction(new Runnable() { @Override public void run() { overlayLayer.removeView(p); } }).start();
+        } else {
+            p.animate().cancel();
+            overlayLayer.removeView(p);
+        }
+    }
+
+    private void showPageMenu(View anchor) {
+        final int pg = workspace.page();
+        if (pg >= store.pages.size()) return;
+        List<Menus.Action> acts = new ArrayList<>();
+        if (pg > 0) acts.add(new Menus.Action("Geser halaman ke kiri", new Runnable() {
+            @Override public void run() { movePage(pg, pg - 1); }
+        }));
+        if (pg < store.pages.size() - 1) acts.add(new Menus.Action("Geser halaman ke kanan", new Runnable() {
+            @Override public void run() { movePage(pg, pg + 1); }
+        }));
+        if (acts.isEmpty()) { toast("Hanya ada satu halaman Home"); return; }
+        showMenu(rectOf(anchor), acts);
+    }
+
+    private void movePage(int from, int to) {
+        java.util.Collections.swap(store.pages, from, to);
+        store.save();
+        rebuildAll();
+        workspace.smoothTo(to);
     }
 
     private void setEditOn(CellLayout cl, boolean on) {
@@ -817,8 +987,9 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         panelBox = box;
         panelFolder = folder;
 
+        panelAnchor = rectOf(anchor);
         if (animOn()) {
-            final RectF ar = rectOf(anchor);
+            final RectF ar = panelAnchor;
             dim.setAlpha(0f);
             box.setScaleX(startScale(0.3f)); box.setScaleY(startScale(0.3f));
             box.post(new Runnable() {
@@ -845,6 +1016,8 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     private void closePanel(boolean animate) {
         if (panelDim == null) return;
         final FrameLayout dim = panelDim;
+        final GlassLayout box = panelBox;
+        final RectF anchor = panelAnchor;
         boolean changed = false;
         if (panelFolder != null && panelTitle != null) {
             String t = panelTitle.getText().toString().trim();
@@ -855,7 +1028,13 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         panelDim = null; panelBox = null; panelFolder = null; panelTitle = null;
         dismissMenu();
         if (animate && animOn()) {
-            dim.animate().alpha(0f).setDuration(160).withEndAction(new Runnable() {
+            // tutup = kebalikan animasi buka: panel mengecil kembali ke ikon asalnya
+            if (box != null && anchor != null && prefs.transition() != Prefs.TR_FADE) {
+                box.setPivotX(anchor.centerX() - box.getLeft());
+                box.setPivotY(anchor.centerY() - box.getTop());
+                box.animate().scaleX(0.3f).scaleY(0.3f).setDuration(200).setInterpolator(new android.view.animation.AccelerateInterpolator(1.3f)).start();
+            }
+            dim.animate().alpha(0f).setDuration(200).withEndAction(new Runnable() {
                 @Override public void run() { overlayLayer.removeView(dim); }
             }).start();
         } else {
@@ -909,13 +1088,29 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         final SearchOverlay s = search;
         search = null;
         s.hideKeyboard();
+        if (animOn()) {
+            s.setEnabled(false);
+            s.animate().alpha(0f).translationY(root.getHeight() * 0.12f).setDuration(180)
+                    .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                    .withEndAction(new Runnable() { @Override public void run() { overlayLayer.removeView(s); } }).start();
+        } else {
+            overlayLayer.removeView(s);
+        }
+    }
+
+    private void closeSearchNow() {
+        if (search == null) return;
+        final SearchOverlay s = search;
+        search = null;
+        s.hideKeyboard();
+        s.animate().cancel();
         overlayLayer.removeView(s);
     }
 
     // ------------------------------------------------------------------ callback host
 
     @Override public void launch(AppRepo.AppInfo a, View v) {
-        closeSearch();
+        closeSearchNow();
         closePanel(false);
         repo.launch(a, v);
     }
@@ -1172,12 +1367,13 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (picker != null) return;
         dismissMenu();
         closePanel(false);
-        closeSearch();
+        closeSearchNow();
         picker = new WidgetPicker(this, this, prefs, dark, metrics(), root.getWidth(), root.getHeight(), insTop,
                 Math.max(insBottom, 0), exec);
         overlayLayer.addView(picker, new FrameLayout.LayoutParams(-1, -1));
         doneBtn.setVisibility(View.GONE);
         addBtn.setVisibility(View.GONE);
+        editBar.setVisibility(View.GONE);
     }
 
     @Override public void onPickerClosed(WidgetPicker p) {
@@ -1187,6 +1383,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (edit && picker == null) {
             doneBtn.setVisibility(View.VISIBLE);
             addBtn.setVisibility(View.VISIBLE);
+            editBar.setVisibility(View.VISIBLE);
         }
     }
 
@@ -1331,7 +1528,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     void openSheet(int mode) {
         if (sheet != null || picker != null) return;
         closePanel(false);
-        closeSearch();
+        closeSearchNow();
         makeSheet(mode).open();
     }
 
@@ -1387,7 +1584,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     void openSwitcher() {
         if (switcher != null || root == null || root.getWidth() <= 0) return;
         dismissMenu();
-        closeSearch();
+        closeSearchNow();
         if (picker != null) picker.dismiss(false);
         if (sheet != null) removeSheet(sheet);
         if (edit) exitEdit();

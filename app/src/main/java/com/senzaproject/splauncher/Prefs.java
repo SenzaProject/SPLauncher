@@ -26,7 +26,7 @@ final class Prefs {
 
     int theme() { return sp.getInt("theme", THEME_SYSTEM); }
     int iconStyle() { return sp.getInt("iconStyle", STYLE_NORMAL); }
-    int cols() { return U.clamp(sp.getInt("cols", 4), 4, 6); }
+    int cols() { return U.clamp(sp.getInt("cols", 4), 3, 7); }
     int iconScale() { return U.clamp(sp.getInt("iconScale", 100), 70, 130); }
     int transition() { return U.clamp(sp.getInt("transition", TR_LIQUID), 0, 3); }
     int drawerMode() { return U.clamp(sp.getInt("drawerMode", 0), 0, 1); }
@@ -68,6 +68,10 @@ final class Prefs {
     int iconShape() { return U.clamp(sp.getInt("iconShape", 0), 0, 2); }          // 0 squircle, 1 bulat, 2 kotak
     int labelSize() { return U.clamp(sp.getInt("labelSize", 11), 9, 14); }
     int rowsPref() { return U.clamp(sp.getInt("rowsPref", 0), 0, 8); }            // 0 = otomatis
+    int hGap() { return U.clamp(sp.getInt("hGap", 100), 60, 100); }                // 100 = sel selebar layar (default)
+    int vGap() { return U.clamp(sp.getInt("vGap", 100), 60, 100); }                // 100 = sel setinggi ruang tersedia
+    int dockScale() { return U.clamp(sp.getInt("dockScale", 100), 80, 130); }      // % tinggi Dock
+    int dockLift() { return U.clamp(sp.getInt("dockLift", 0), 0, 40); }            // dp jarak Dock dari bawah (tambahan)
     int dockRadius() { return U.clamp(sp.getInt("dockRadius", 30), 14, 40); }
     int dockOpacity() { return U.clamp(sp.getInt("dockOpacity", 0), 0, 80); }     // 0 = ikuti kepekatan panel
     boolean pageDots() { return sp.getBoolean("pageDots", true); }
@@ -117,6 +121,7 @@ final class Prefs {
                 + "|" + iconPack() + "|" + notifBadges()
                 + "|" + iconShape() + "|" + labelSize() + "|" + rowsPref() + "|" + dockRadius() + "|" + dockOpacity()
                 + "|" + pageDots() + "|" + hideStatusBar() + "|" + wallDim()
+                + "|" + hGap() + "|" + vGap() + "|" + dockScale() + "|" + dockLift()
                 + "|" + transition() + "|" + drawerMode() + "|" + widgetPlace() + "|" + transparentFolders() + "|" + zeroScreen();
     }
 }

@@ -280,6 +280,7 @@ final class DragController {
                         insertIdx = -1;
                         a.store.normalize(a.cols, a.rows, a.dockCap);
                         a.store.save();
+                        a.flipSkip = item;
                         a.rebuildAll();
                     }
                 }).start();

@@ -98,7 +98,8 @@ final class AppRepo {
                 src.getLocationOnScreen(loc);
                 r = new Rect(loc[0], loc[1], loc[0] + src.getWidth(), loc[1] + src.getHeight());
             }
-            int tr = new Prefs(ctx).transition();
+            Prefs pf = new Prefs(ctx);
+            int tr = pf.reduceMotion() ? Prefs.TR_NONE : pf.transition();
             if (tr == Prefs.TR_NONE) {
                 opts = ActivityOptions.makeCustomAnimation(ctx, 0, 0).toBundle();
             } else if (tr == Prefs.TR_ZOOM) {

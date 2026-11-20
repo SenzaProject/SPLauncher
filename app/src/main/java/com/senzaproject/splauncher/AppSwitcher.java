@@ -14,6 +14,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewConfiguration;
 import android.view.ViewOutlineProvider;
 import android.view.animation.AccelerateInterpolator;
@@ -236,6 +237,9 @@ final class AppSwitcher extends FrameLayout {
             sl.setScaleY(sc);
             // kartu terdekat dari tengah digambar paling depan
             sl.setTranslationZ(U.dpf(a, 40) - ad * U.dpf(a, 10));
+            // hanya kartu yang di tengah menampilkan ikon + nama dengan jelas
+            View head = ((ViewGroup) sl).getChildAt(0);
+            if (head != null) head.setAlpha(1f - 0.65f * Math.min(1f, ad));
         }
     }
 
@@ -379,7 +383,7 @@ final class AppSwitcher extends FrameLayout {
         postDelayed(new Runnable() { @Override public void run() { a.closeSwitcher(false); } }, 320);
     }
 
-    private void dismissSlot(final View slot, AppRepo.AppInfo app, long delay, final boolean refresh) {
+    private void dismissSlot(final View slot, AppRepo.AppInfo app, final long delay, final boolean refresh) {
         Recents.remove(a, app.pkg);
         if (prefs.switcherKill()) {
             try {
@@ -393,7 +397,21 @@ final class AppSwitcher extends FrameLayout {
                 .setInterpolator(new AccelerateInterpolator(1.2f))
                 .withEndAction(new Runnable() {
                     @Override public void run() {
+                        int idx = strip.indexOfChild(slot);
+                        float shift = slot.getWidth();
+                        ViewGroup.LayoutParams lp = slot.getLayoutParams();
+                        if (lp instanceof LinearLayout.LayoutParams) shift += ((LinearLayout.LayoutParams) lp).getMarginEnd();
                         strip.removeView(slot);
+                        if (delay == 0 && idx >= 0 && !prefs.reduceMotion()) {
+                            // kartu di belakangnya bergeser halus mengisi celah, bukan melompat
+                            for (int i = idx; i < strip.getChildCount(); i++) {
+                                View c = strip.getChildAt(i);
+                                c.setTranslationX(shift);
+                                c.animate().translationX(0f).setDuration(240)
+                                        .setInterpolator(new DecelerateInterpolator(1.6f)).start();
+                            }
+                            if (stacked) { removeCallbacks(snapRun); postDelayed(snapRun, 280); }
+                        }
                         if (refresh) refreshEmpty();
                     }
                 }).start();

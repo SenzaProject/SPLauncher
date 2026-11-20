@@ -24,6 +24,14 @@ Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika m
 - **Tata Letak Widget**: widget baru ditaruh di atas (default) atau bawah halaman.
 - **Tema Jadwal**: mode gelap otomatis pada jam yang diatur. **Folder Transparan** dapat dimatikan.
 
+## v1.0.1 (perbaikan tahap 1-6, belum diuji di perangkat)
+- **Animasi**: perpindahan/resize ikon & widget kini dianimasikan (FLIP di `LauncherActivity.captureFlip/playFlip`), folder menutup
+  dengan mengecil ke ikon asal, Laci/Pencarian punya animasi keluar, Recents menutup celah antar kartu dengan halus, label kartu
+  non-tengah memudar. `AppRepo.launch` kini menghormati "Kurangi Gerakan".
+- **Edit Home**: tombol "Sesuaikan" (slider langsung: ukuran ikon, kolom 3-7, baris 4-8, jarak H/V, ukuran Dock) dan "Halaman"
+  (geser urutan halaman) di mode edit; opsi yang sama ada di Pengaturan > Layar Utama/Dock (`EditPanel`).
+- **Stabilitas**: callback Handler dibersihkan di `onDestroy`; switcher ditutup saat Activity dihancurkan.
+
 ## v1.0.0 (Beta Test)
 - **Versi**: VERSION_NAME `1.0.0 (Beta Test)`, VERSION_CODE 4 (dinaikkan agar bisa menimpa build 3).
 - **Perbaikan blur**: slider "Intensitas Blur" sebelumnya tidak punya posisi "tanpa blur" (0% tetap buram) dan rentang
