@@ -74,6 +74,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     WallView wallView;
     Workspace workspace;
     LibraryView library;
+    private String libraryKey = "";
     PageDots dots;
     GlassLayout dockPanel;
     CellLayout dockLayout;
@@ -466,8 +467,15 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         dismissMenu();
         workspace.removeAllViews();
         for (ArrayList<LayoutStore.Item> page : store.pages) workspace.addView(newPage(page, false));
-        library = new LibraryView(this);
-        library.rebuild(repo.all(), prefs, dark, insTop, insBottom, w, this);
+        // App Library mahal dibangun (semua aplikasi + ikon); pakai ulang selama masukannya sama.
+        // Ini juga menjaga posisi gulir Library saat Home dibangun ulang (slider, drop, resize widget).
+        String libSig = repo.rev + "|" + dark + "|" + prefs.iconStyle() + "|" + prefs.iconPack() + "|" + prefs.iconShape()
+                + "|" + prefs.tintIndex() + "|" + prefs.labelSize() + "|" + prefs.iconScale() + "|" + w + "|" + insTop + "|" + insBottom;
+        if (library == null || !libSig.equals(libraryKey)) {
+            library = new LibraryView(this);
+            library.rebuild(repo.all(), prefs, dark, insTop, insBottom, w, this);
+            libraryKey = libSig;
+        }
         workspace.addView(library);
         playFlip(w);
         workspace.setHomeCount(store.pages.size());

@@ -24,6 +24,11 @@ Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika m
 - **Tata Letak Widget**: widget baru ditaruh di atas (default) atau bawah halaman.
 - **Tema Jadwal**: mode gelap otomatis pada jam yang diatur. **Folder Transparan** dapat dimatikan.
 
+## Belum dirilis (versi tidak diubah)
+- **Optimasi rebuild Home**: `App Library` kini dipakai ulang selama masukannya sama (`libraryKey`, `AppRepo.rev`), jadi menggeser slider
+  "Sesuaikan", drop ikon, atau resize widget tidak lagi membangun ulang semua ikon Library dan posisi gulir Library terjaga.
+- **Memori**: screenshot layar penuh dari Aksesibilitas selalu didaur ulang (sebelumnya bocor bila aplikasi depan sudah berganti).
+
 ## v1.0.2
 - **Perbaikan warna ikon pucat/transparan** (terlihat di App Library, folder, Layar Nol): `IconView` memakai satu `Paint` untuk placeholder
   (alpha 20%), badge, dan bitmap ikon, sehingga alpha sisa ikut menggambar ikon. Kini bitmap memakai `bmpPaint` terpisah.

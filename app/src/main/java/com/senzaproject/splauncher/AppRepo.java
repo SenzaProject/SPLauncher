@@ -51,6 +51,8 @@ final class AppRepo {
     final LauncherApps la;
     private ArrayList<AppInfo> apps = new ArrayList<>();
     private HashMap<String, AppInfo> byKey = new HashMap<>();
+    /** Naik tiap reload(); dipakai untuk mendeteksi daftar aplikasi berubah. */
+    int rev;
 
     AppRepo(Context c) {
         ctx = c.getApplicationContext();
@@ -76,6 +78,7 @@ final class AppRepo {
         });
         apps = list;
         byKey = map;
+        rev++;
         try {
             if (IconPacks.rebuild(ctx, list)) IconFactory.clear();
         } catch (Throwable ignored) { }

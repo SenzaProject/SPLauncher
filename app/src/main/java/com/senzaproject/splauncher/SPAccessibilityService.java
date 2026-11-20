@@ -208,8 +208,9 @@ public class SPAccessibilityService extends AccessibilityService {
                         if (hw == null) return;
                         Bitmap sw = hw.copy(Bitmap.Config.ARGB_8888, false);
                         hw.recycle();
-                        if (sw != null && pkg.equals(fgPkg)) {
-                            Recents.saveSnapshot(SPAccessibilityService.this, pkg, sw);
+                        if (sw != null) {
+                            // bitmap layar penuh selalu didaur ulang, juga bila aplikasi depan sudah berganti
+                            if (pkg.equals(fgPkg)) Recents.saveSnapshot(SPAccessibilityService.this, pkg, sw);
                             sw.recycle();
                         }
                     } catch (Throwable ignored) {
