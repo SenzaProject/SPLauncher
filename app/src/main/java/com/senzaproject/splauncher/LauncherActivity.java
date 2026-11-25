@@ -153,7 +153,9 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         dockPanel = new GlassLayout(this, 30, 0.30f, true);
         dockPanel.addView(dockLayout, new LinearLayout.LayoutParams(-1, -1));
         root.addView(dockPanel, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+        // Urutan gambar ditentukan elevation (Z), bukan urutan addView: Dock (8dp) tadinya menutupi Layar Nol, folder, dan menu.
         overlayLayer = new FrameLayout(this);
+        overlayLayer.setElevation(U.dpf(this, 16));
         root.addView(overlayLayer, new FrameLayout.LayoutParams(-1, -1));
         doneBtn = new GlassLayout(this, 17, 0.40f, true);
         doneBtn.setGravity(Gravity.CENTER);
@@ -167,6 +169,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         doneBtn.addView(dt, new LinearLayout.LayoutParams(-2, -1));
         doneBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { exitEdit(); } });
         doneBtn.setVisibility(View.GONE);
+        doneBtn.setElevation(U.dpf(this, 20));
         root.addView(doneBtn, new FrameLayout.LayoutParams(-2, U.dp(this, 34), Gravity.TOP | Gravity.END));
         addBtn = new GlassLayout(this, 17, 0.40f, true);
         addBtn.setGravity(Gravity.CENTER);
@@ -180,6 +183,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         addBtn.setContentDescription("Tambah widget");
         addBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { openWidgetPicker(); } });
         addBtn.setVisibility(View.GONE);
+        addBtn.setElevation(U.dpf(this, 20));
         root.addView(addBtn, new FrameLayout.LayoutParams(U.dp(this, 34), U.dp(this, 34), Gravity.TOP | Gravity.START));
         editBar = new LinearLayout(this);
         editBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -189,9 +193,11 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         pgp.setMarginStart(U.dp(this, 8));
         editBar.addView(pill("Halaman", new View.OnClickListener() { @Override public void onClick(View v) { showPageMenu(v); } }), pgp);
         editBar.setVisibility(View.GONE);
+        editBar.setElevation(U.dpf(this, 20));
         root.addView(editBar, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
         dragLayer = new FrameLayout(this);
         dragLayer.setClipChildren(false);
+        dragLayer.setElevation(U.dpf(this, 28));
         root.addView(dragLayer, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
         drag = new DragController(this);
@@ -909,16 +915,17 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         closePanel(false);
         int W = root.getWidth(), H = root.getHeight();
         final FrameLayout dim = new FrameLayout(this);
-        dim.setBackgroundColor(0x73000000);
+        dim.setBackgroundColor(0x40000000);
         dim.setClickable(true);
         dim.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { closePanel(true); } });
 
         int pad = U.dp(this, 16);
-        final GlassLayout box = new GlassLayout(this, 32, prefs.transparentFolders() ? (dark ? 0.55f : 0.62f) : 0.92f, dark);
+        // gaya Liquid Glass iOS: kaca tembus pandang bertinta gelap tipis dengan teks putih, di tema terang maupun gelap
+        final GlassLayout box = new GlassLayout(this, 36, prefs.transparentFolders() ? 0.30f : 0.80f, true);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(pad, pad, pad, pad);
         box.setClickable(true);
-        int fg = dark ? 0xFFFFFFFF : 0xFF111114;
+        int fg = 0xFFFFFFFF;
 
         if (folder != null) {
             panelTitle = new EditText(this);
@@ -966,7 +973,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
             final AppRepo.AppInfo a = apps.get(i);
             IconView iv = new IconView(this);
             iv.bindApp(a, prefs, fi, true, dark);
-            iv.setLabelColor(fg, dark);
+            iv.setLabelColor(fg, true);
             iv.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) { closePanel(false); repo.launch(a, v); }
             });
@@ -1178,7 +1185,27 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         @Override public void onZeroClosed(ZeroScreen z) { if (zero == z) removeZero(); else { z.release(); overlayLayer.removeView(z); } }
         @Override public boolean reduceMotion() { return prefs.reduceMotion(); }
         @Override public void onZeroSearch() { removeZero(); openSearch(); }
+        @Override public View createExternal(LayoutStore.Item it) { return externalView(it); }
+        @Override public void onZeroAdd() { openZeroPicker(); }
+        @Override public void onZeroRemoveExternal(int wid) {
+            try { widgetHost.deleteAppWidgetId(wid); } catch (Throwable ignored) { }
+            hostViews.remove(wid);
+        }
     };
+
+    private ZeroConfig zeroCfg;
+    private boolean zeroPicking;
+
+    private ZeroConfig zeroConfig() {
+        if (zeroCfg == null) zeroCfg = new ZeroConfig(this);
+        return zeroCfg;
+    }
+
+    /** Galeri widget dibuka dari Layar Nol: widget yang dipilih masuk ke Layar Nol, bukan ke Home. */
+    private void openZeroPicker() {
+        openWidgetPicker();
+        zeroPicking = true;
+    }
 
     private void removeZero() {
         ZeroScreen z = zero;
@@ -1191,7 +1218,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     @Override public void onZeroBegin() {
         if (zero != null) removeZero();
         dismissMenu();
-        zero = new ZeroScreen(this, prefs, dark, insTop, insBottom, zeroHost);
+        zero = new ZeroScreen(this, prefs, dark, insTop, insBottom, zeroConfig(), zeroHost);
         overlayLayer.addView(zero, new FrameLayout.LayoutParams(-1, -1));
         zero.setProgress(0f);
     }
@@ -1373,6 +1400,7 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
 
     void openWidgetPicker() {
         if (picker != null) return;
+        zeroPicking = false;
         dismissMenu();
         closePanel(false);
         closeSearchNow();
@@ -1396,6 +1424,12 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
     }
 
     @Override public void onPickBuiltin(BuiltinWidgets.Spec s) {
+        if (zeroPicking) {
+            zeroPicking = false;
+            zeroConfig().addBuiltin(s.kind, s.sw == BuiltinWidgets.FULL ? 4 : s.sw, s.sh);
+            if (zero != null) zero.rebuild();
+            return;
+        }
         placeWidget(LayoutStore.Item.widget(s.kind, s.widthFor(cols), s.heightFor(rows)));
     }
 
@@ -1456,8 +1490,16 @@ public class LauncherActivity extends Activity implements Workspace.Listener, Li
         if (info == null || pendingId < 0) { cancelPending(); return; }
         int[] span = ExtWidgets.spanFor(info, metrics());
         LayoutStore.Item w = LayoutStore.Item.external(pendingId, info.provider.flattenToString(), span[0], span[1]);
+        int newId = pendingId;
         pendingId = -1;
         pendingInfo = null;
+        if (zeroPicking) {
+            zeroPicking = false;
+            ZeroConfig zc = zeroConfig();
+            zc.addExternal(newId, w.wprov, span[0] < 4, span[1], zc.defaultHeightDp(LayoutStore.W_EXT, span[0] < 4 ? 2 : 4, span[1]));
+            if (zero != null) zero.rebuild();
+            return;
+        }
         placeWidget(w);
     }
 

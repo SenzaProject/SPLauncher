@@ -27,6 +27,12 @@ final class ZeroScreen extends FrameLayout {
         boolean reduceMotion();
         /** Bilah pencarian di Layar Nol diketuk. */
         void onZeroSearch();
+        /** Tampilan widget aplikasi lain (AppWidgetHostView) untuk Layar Nol. */
+        View createExternal(LayoutStore.Item it);
+        /** Tombol "Tambah Widget" di mode ubah. */
+        void onZeroAdd();
+        /** Widget aplikasi lain dihapus dari Layar Nol: lepaskan appWidgetId-nya. */
+        void onZeroRemoveExternal(int wid);
     }
 
     private final Host host;
@@ -41,9 +47,20 @@ final class ZeroScreen extends FrameLayout {
     private boolean dragging;
     private VelocityTracker vt;
 
-    ZeroScreen(Context c, Prefs prefs, boolean dark, int insTop, int insBottom, Host host) {
+    private final ZeroConfig cfg;
+    private final Prefs prefs;
+    private final boolean dark;
+    private final int fg;
+    private final LinearLayout col;
+    private final ScrollView sv;
+    private boolean edit;
+
+    ZeroScreen(Context c, Prefs prefs, boolean dark, int insTop, int insBottom, ZeroConfig cfg, Host host) {
         super(c);
         this.host = host;
+        this.cfg = cfg;
+        this.prefs = prefs;
+        this.dark = dark;
         slop = ViewConfiguration.get(c).getScaledTouchSlop();
         setClickable(true);
 
@@ -55,7 +72,7 @@ final class ZeroScreen extends FrameLayout {
         body.setClipChildren(false);
         addView(body, new LayoutParams(-1, -1));
 
-        ScrollView sv = new ScrollView(c);
+        sv = new ScrollView(c);
         sv.setVerticalScrollBarEnabled(false);
         sv.setOverScrollMode(View.OVER_SCROLL_NEVER);
         sv.setClipChildren(false);
@@ -63,42 +80,189 @@ final class ZeroScreen extends FrameLayout {
         body.addView(sv, new LayoutParams(-1, -1));
 
         int side = U.dp(c, 16);
-        LinearLayout col = new LinearLayout(c);
+        col = new LinearLayout(c);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setClipChildren(false);
         col.setPadding(side, insTop + U.dp(c, 14), side, insBottom + U.dp(c, 28));
         sv.addView(col, new ScrollView.LayoutParams(-1, -2));
 
-        int fg = dark ? 0xFFFFFFFF : 0xFF111114;
+        fg = dark ? 0xFFFFFFFF : 0xFF111114;
+        rebuild();
+        applyProgress();
+    }
+
+    // ------------------------------------------------------------------ isi & mode edit
+
+    /** Membangun ulang daftar widget dari ZeroConfig (dipanggil setelah ada perubahan). */
+    void rebuild() {
+        final int keepY = sv.getScrollY();
+        final Context c = getContext();
+        col.removeAllViews();
+
+        LinearLayout head = new LinearLayout(c);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(U.dp(c, 4), 0, 0, U.dp(c, 12));
         TextView title = new TextView(c);
-        title.setText("Layar Nol");
+        title.setText(cfg.title);
         title.setTextColor(fg);
         title.setTextSize(30f);
         title.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         title.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        title.setPadding(U.dp(c, 4), 0, 0, U.dp(c, 12));
-        col.addView(title, new LinearLayout.LayoutParams(-1, -2));
+        if (!cfg.showTitle) title.setVisibility(edit ? View.VISIBLE : View.INVISIBLE);
+        if (!cfg.showTitle && edit) title.setAlpha(0.35f);
+        head.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
+        head.addView(pill(edit ? "Selesai" : "Ubah", new View.OnClickListener() {
+            @Override public void onClick(View v) { edit = !edit; rebuild(); }
+        }), new LinearLayout.LayoutParams(-2, U.dp(c, 34)));
+        col.addView(head, new LinearLayout.LayoutParams(-1, -2));
 
-        int cw = c.getResources().getDisplayMetrics().widthPixels - 2 * side;
         int gap = U.dp(c, 12);
+        java.util.ArrayList<ZeroConfig.Entry> items = cfg.items;
+        int i = 0;
+        while (i < items.size()) {
+            ZeroConfig.Entry e = items.get(i);
+            LinearLayout.LayoutParams lp;
+            if (e.half) {
+                ZeroConfig.Entry n = (i + 1 < items.size() && items.get(i + 1).half) ? items.get(i + 1) : null;
+                int rowH = U.dp(c, n == null ? e.hDp : Math.max(e.hDp, n.hDp));
+                LinearLayout row = new LinearLayout(c);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setClipChildren(false);
+                row.addView(cell(e), new LinearLayout.LayoutParams(0, rowH, 1f));
+                LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(0, rowH, 1f);
+                p2.setMarginStart(gap);
+                row.addView(n != null ? cell(n) : new View(c), p2);
+                lp = new LinearLayout.LayoutParams(-1, -2);
+                col.addView(row, lp);
+                i += n != null ? 2 : 1;
+            } else {
+                lp = new LinearLayout.LayoutParams(-1, U.dp(c, e.hDp));
+                col.addView(cell(e), lp);
+                i++;
+            }
+            lp.bottomMargin = gap;
+        }
 
-        addWidget(c, col, prefs, dark, BuiltinWidgets.SEARCH, 4, 1, U.dp(c, 56), gap).setOnClickListener(
-                new View.OnClickListener() { @Override public void onClick(View v) { ZeroScreen.this.host.onZeroSearch(); } });
-        addWidget(c, col, prefs, dark, BuiltinWidgets.CLOCK_DIGITAL, 4, 2, Math.round(cw * 0.5f), gap);
-        addWidget(c, col, prefs, dark, BuiltinWidgets.DATE, 4, 2, Math.round(cw * 0.5f), gap);
-        addWidget(c, col, prefs, dark, BuiltinWidgets.MONTH, 4, 3, Math.round(cw * 0.8f), gap);
-        addWidget(c, col, prefs, dark, BuiltinWidgets.BATTERY, 4, 2, Math.round(cw * 0.5f), 0);
+        if (edit) {
+            GlassLayout add = new GlassLayout(c, 20, 0.40f, true);
+            add.setGravity(Gravity.CENTER);
+            TextView t = new TextView(c);
+            t.setText("+  Tambah Widget");
+            t.setTextColor(0xFFFFFFFF);
+            t.setTextSize(16f);
+            t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            add.addView(t, new LinearLayout.LayoutParams(-2, -2));
+            add.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) { ZeroScreen.this.host.onZeroAdd(); }
+            });
+            col.addView(add, new LinearLayout.LayoutParams(-1, U.dp(c, 56)));
 
-        applyProgress();
+            LinearLayout tools = new LinearLayout(c);
+            tools.setGravity(Gravity.CENTER);
+            tools.addView(pill(cfg.showTitle ? "Judul: Tampil" : "Judul: Sembunyi", new View.OnClickListener() {
+                @Override public void onClick(View v) { cfg.showTitle = !cfg.showTitle; cfg.save(); rebuild(); }
+            }), new LinearLayout.LayoutParams(-2, U.dp(c, 34)));
+            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-2, U.dp(c, 34));
+            rp.setMarginStart(U.dp(c, 10));
+            tools.addView(pill("Atur Ulang", new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    for (ZeroConfig.Entry x : cfg.items) if (x.isExt()) ZeroScreen.this.host.onZeroRemoveExternal(x.wid);
+                    cfg.defaults();
+                    cfg.save();
+                    rebuild();
+                }
+            }), rp);
+            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, -2);
+            tp.topMargin = U.dp(c, 12);
+            col.addView(tools, tp);
+        }
+        sv.post(new Runnable() { @Override public void run() { sv.scrollTo(0, keepY); } });
     }
 
-    private static View addWidget(Context c, LinearLayout col, Prefs prefs, boolean dark, String kind,
-                                  int sw, int sh, int heightPx, int bottomGap) {
-        BuiltinWidgets.Base w = BuiltinWidgets.create(c, LayoutStore.Item.widget(kind, sw, sh), prefs, dark);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, heightPx);
-        lp.bottomMargin = bottomGap;
-        col.addView(w, lp);
-        return w;
+    private GlassLayout pill(String text, View.OnClickListener l) {
+        Context c = getContext();
+        GlassLayout g = new GlassLayout(c, 17, 0.40f, true);
+        g.setGravity(Gravity.CENTER);
+        TextView t = new TextView(c);
+        t.setText(text);
+        t.setTextColor(0xFFFFFFFF);
+        t.setTextSize(14f);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        t.setPadding(U.dp(c, 14), 0, U.dp(c, 14), 0);
+        t.setGravity(Gravity.CENTER);
+        g.addView(t, new LinearLayout.LayoutParams(-2, -1));
+        g.setOnClickListener(l);
+        return g;
+    }
+
+    private View cell(final ZeroConfig.Entry e) {
+        final Context c = getContext();
+        View w;
+        if (e.isExt()) {
+            w = host.createExternal(e.toItem());
+        } else {
+            BuiltinWidgets.Base b = BuiltinWidgets.create(c, e.toItem(), prefs, dark);
+            if (BuiltinWidgets.SEARCH.equals(e.kind) && !edit) {
+                b.setOnClickListener(new View.OnClickListener() {
+                    @Override public void onClick(View v) { ZeroScreen.this.host.onZeroSearch(); }
+                });
+            }
+            w = b;
+        }
+        if (!edit) return w;
+
+        FrameLayout f = new FrameLayout(c);
+        f.setClipChildren(false);
+        f.addView(w, new FrameLayout.LayoutParams(-1, -1));
+        FrameLayout ov = new FrameLayout(c);
+        ov.setClickable(true);
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(0x4D000000);
+        g.setCornerRadius(U.dpf(c, 20));
+        ov.setBackground(g);
+        f.addView(ov, new FrameLayout.LayoutParams(-1, -1));
+
+        GlassLayout bar = new GlassLayout(c, 16, 0.55f, true);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER);
+        bar.addView(tool(c, "\u2212", 0, new Runnable() { @Override public void run() { e.hDp = ZeroConfig.clampH(e.hDp - 24); changed(); } }));
+        bar.addView(tool(c, "+", 0, new Runnable() { @Override public void run() { e.hDp = ZeroConfig.clampH(e.hDp + 24); changed(); } }));
+        bar.addView(tool(c, "\u00BD", e.half ? 0xFF0A84FF : 0, new Runnable() { @Override public void run() { e.half = !e.half; changed(); } }));
+        bar.addView(tool(c, "\u2191", 0, new Runnable() { @Override public void run() { move(e, -1); } }));
+        bar.addView(tool(c, "\u2193", 0, new Runnable() { @Override public void run() { move(e, 1); } }));
+        bar.addView(tool(c, "\u00D7", 0xFFFF453A, new Runnable() {
+            @Override public void run() {
+                if (e.isExt()) host.onZeroRemoveExternal(e.wid);
+                cfg.items.remove(e);
+                changed();
+            }
+        }));
+        f.addView(bar, new FrameLayout.LayoutParams(-2, U.dp(c, 36), Gravity.CENTER));
+        return f;
+    }
+
+    private TextView tool(Context c, String label, int color, final Runnable r) {
+        TextView t = new TextView(c);
+        t.setText(label);
+        t.setTextColor(color == 0 ? 0xFFFFFFFF : color);
+        t.setTextSize(18f);
+        t.setGravity(Gravity.CENTER);
+        t.setMinWidth(U.dp(c, 42));
+        t.setMinHeight(U.dp(c, 36));
+        t.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { r.run(); } });
+        return t;
+    }
+
+    private void move(ZeroConfig.Entry e, int dir) {
+        int i = cfg.items.indexOf(e), j = i + dir;
+        if (i < 0 || j < 0 || j >= cfg.items.size()) return;
+        java.util.Collections.swap(cfg.items, i, j);
+        changed();
+    }
+
+    private void changed() {
+        cfg.save();
+        rebuild();
     }
 
     float progress() { return progress; }

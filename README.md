@@ -29,6 +29,13 @@ Naikkan VERSION_CODE/VERSION_NAME di version.properties tiap rilis. Uji logika m
   "Sesuaikan", drop ikon, atau resize widget tidak lagi membangun ulang semua ikon Library dan posisi gulir Library terjaga.
 - **Memori**: screenshot layar penuh dari Aksesibilitas selalu didaur ulang (sebelumnya bocor bila aplikasi depan sudah berganti).
 
+- **Layar Nol bisa diedit**: tombol "Ubah" di pojok kanan atas Layar Nol, lalu tiap widget punya − / + (tinggi), ½ (setengah lebar),
+  ↑ / ↓ (urutan), × (hapus), plus "Tambah Widget" (bawaan maupun widget aplikasi lain), "Judul: Tampil/Sembunyi", dan "Atur Ulang".
+  Disimpan lewat `ZeroConfig` (sebelumnya kelas ini belum terpakai dan isi Layar Nol ditulis tetap di kode).
+- **Dock tidak lagi menutupi Layar Nol / folder / menu**: urutan gambar ditentukan elevation, dan Dock (8dp) lebih tinggi dari
+  `overlayLayer`. Kini overlayLayer 16dp, tombol edit 20dp, dragLayer 28dp (ikon yang diseret juga tidak lagi tertutup Dock).
+- **Panel folder bergaya Liquid Glass iOS**: kaca tembus pandang bertinta gelap tipis, teks putih, dan scrim lebih ringan.
+
 ## v1.0.2
 - **Perbaikan warna ikon pucat/transparan** (terlihat di App Library, folder, Layar Nol): `IconView` memakai satu `Paint` untuk placeholder
   (alpha 20%), badge, dan bitmap ikon, sehingga alpha sisa ikut menggambar ikon. Kini bitmap memakai `bmpPaint` terpisah.
